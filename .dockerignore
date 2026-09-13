@@ -1,0 +1,11 @@
+**/bin
+**/obj
+**/.vs
+.vscode
+*.user
+*.suo
+*.userosscache
+*.log
+docker-compose.*.yml
+README*
+**/*.md

@@ -1,0 +1,12 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/OficinaExecucao.API/OficinaExecucao.API.csproj" />
+    <Project Path="src/OficinaExecucao.Application/OficinaExecucao.Application.csproj" />
+    <Project Path="src/OficinaExecucao.Domain/OficinaExecucao.Domain.csproj" />
+    <Project Path="src/OficinaExecucao.Infrastructure/OficinaExecucao.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/OficinaExecucao.Tests.Integration/OficinaExecucao.Tests.Integration.csproj" />
+    <Project Path="tests/OficinaExecucao.Tests.Unit/OficinaExecucao.Tests.Unit.csproj" />
+  </Folder>
+</Solution>
