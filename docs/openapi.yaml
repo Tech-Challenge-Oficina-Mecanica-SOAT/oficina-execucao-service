@@ -1,0 +1,185 @@
+openapi: 3.0.3
+info:
+  title: Execução Service API
+  description: |
+    Gerencia a fila de execução, diagnósticos e reparos.
+    Banco NoSQL (DynamoDB) para armazenar fila e histórico.
+  version: 1.0.0
+  contact:
+    name: Vinicius (Papel C)
+
+servers:
+  - url: https://api-{env}.oficina.example.com/execucao
+    variables:
+      env:
+        default: homolog
+        enum: [homolog, prod]
+
+paths:
+  /fila:
+    get:
+      summary: Fila de execução (ordens aguardando)
+      description: Endpoint público para dashboard interno mostrar fila
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [AguardandoDiagnostico, AguardandoReparo, EmDiagnostico, EmReparo]
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ItemFila'
+
+  /execucao/{osId}/diagnostico:
+    post:
+      summary: Registrar conclusão do diagnóstico (ação do mecânico)
+      description: |
+        Endpoint que representa ação humana do mecânico.
+        Publica `diagnostico.concluido` com peças/serviços necessários.
+      parameters:
+        - name: osId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegistrarDiagnosticoRequest'
+      responses:
+        '204':
+          description: Diagnóstico registrado
+
+  /execucao/{osId}/iniciar-reparo:
+    post:
+      summary: Iniciar reparo (ação do mecânico após orçamento aprovado)
+      description: Publica `execucao.iniciada`
+      parameters:
+        - name: osId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '204':
+          description: Reparo iniciado
+
+  /execucao/{osId}/finalizar:
+    post:
+      summary: Finalizar reparo (ação do mecânico)
+      description: Publica `execucao.finalizada`. Billing Service cria cobrança.
+      parameters:
+        - name: osId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                tempoRealHoras: { type: number }
+      responses:
+        '204':
+          description: Finalizado
+
+  /execucao/{osId}:
+    get:
+      summary: Estado atual da execução da OS
+      parameters:
+        - name: osId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Execucao'
+
+  /execucao/{osId}/historico:
+    get:
+      summary: Histórico completo de estados
+      parameters:
+        - name: osId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/HistoricoExecucao'
+
+components:
+  schemas:
+    StatusExecucao:
+      type: string
+      enum:
+        - AguardandoDiagnostico
+        - EmDiagnostico
+        - DiagnosticoConcluido
+        - AguardandoReparo
+        - EmReparo
+        - Finalizado
+        - Cancelado
+
+    ItemFila:
+      type: object
+      properties:
+        osId: { type: string, format: uuid }
+        status: { $ref: '#/components/schemas/StatusExecucao' }
+        adicionadaEm: { type: string, format: date-time }
+        posicaoFila: { type: integer }
+
+    RegistrarDiagnosticoRequest:
+      type: object
+      required: [pecas, servicos]
+      properties:
+        pecas:
+          type: array
+          items:
+            type: object
+            properties:
+              pecaId: { type: string, format: uuid }
+              quantidade: { type: integer }
+        servicos:
+          type: array
+          items:
+            type: object
+            properties:
+              servicoId: { type: string, format: uuid }
+              quantidade: { type: integer }
+        tempoEstimadoHoras: { type: number }
+        observacoes: { type: string }
+
+    Execucao:
+      type: object
+      properties:
+        osId: { type: string, format: uuid }
+        status: { $ref: '#/components/schemas/StatusExecucao' }
+        diagnostico:
+          $ref: '#/components/schemas/RegistrarDiagnosticoRequest'
+        iniciadaEm: { type: string, format: date-time, nullable: true }
+        finalizadaEm: { type: string, format: date-time, nullable: true }
+        tempoRealHoras: { type: number, nullable: true }
+
+    HistoricoExecucao:
+      type: object
+      properties:
+        statusAnterior: { $ref: '#/components/schemas/StatusExecucao' }
+        statusNovo: { $ref: '#/components/schemas/StatusExecucao' }
+        mudouEm: { type: string, format: date-time }
+        origem:
+          type: string
+          enum: [evento, api, sistema]
