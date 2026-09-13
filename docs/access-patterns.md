@@ -8,7 +8,7 @@ Single table: `oficina-execucao-{env}`.
 | 2 | Diagnóstico registrado de uma OS | GetItem | PK=`OS#{osId}`, SK=`DIAGNOSTICO` |
 | 3 | Histórico completo de mudanças de status de uma OS | Query | PK=`OS#{osId}`, SK begins_with `HISTORICO#` |
 | 4 | Verificar se um evento já foi processado (idempotência) | GetItem | PK=`OS#{osId}`, SK=`HISTORICO#EVT#{eventId}` |
-| 5 | Listar a fila filtrada por status (`GET /fila`) | Query na GSI `status-index` | PK=`status`, ordenado por SK=`adicionadoEm` |
+| 5 | Listar a fila filtrada por status (`GET /fila`) | Query na GSI `status-index` | PK=`status`, ordenado por SK=`adicionadaEm` |
 
 Notas:
 

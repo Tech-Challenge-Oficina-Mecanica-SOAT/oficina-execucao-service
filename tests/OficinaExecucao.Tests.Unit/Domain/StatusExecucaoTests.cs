@@ -11,7 +11,7 @@ public class StatusExecucaoTests
     {
         var estados = Enum.GetNames<StatusExecucao>();
 
-        estados.Should().BeEquivalentTo(new[]
+        estados.Should().Equal(new[]
         {
             "AguardandoDiagnostico",
             "EmDiagnostico",

@@ -71,3 +71,28 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+
+  terraform-validate:
+    name: Terraform Validate
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        dir: [infra/bootstrap, infra/terraform/envs/homolog, infra/terraform/envs/prod]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Format check
+        run: terraform fmt -check -recursive
+        working-directory: ${{ matrix.dir }}
+
+      - name: Init (no backend)
+        run: terraform init -backend=false
+        working-directory: ${{ matrix.dir }}
+
+      - name: Validate
+        run: terraform validate
+        working-directory: ${{ matrix.dir }}

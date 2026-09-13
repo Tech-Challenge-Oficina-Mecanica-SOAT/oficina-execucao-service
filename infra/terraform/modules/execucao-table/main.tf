@@ -20,14 +20,14 @@ resource "aws_dynamodb_table" "execucao" {
   }
 
   attribute {
-    name = "adicionadoEm"
+    name = "adicionadaEm"
     type = "S"
   }
 
   global_secondary_index {
     name            = "status-index"
     hash_key        = "status"
-    range_key       = "adicionadoEm"
+    range_key       = "adicionadaEm"
     projection_type = "ALL"
   }
 

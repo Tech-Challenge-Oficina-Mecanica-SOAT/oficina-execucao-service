@@ -1,6 +1,7 @@
 using Serilog;
 using Serilog.Formatting.Compact;
 using Scalar.AspNetCore;
+using System.Text.Json.Serialization;
 
 Log.Logger = new LoggerConfiguration()
     .WriteTo.Console(new CompactJsonFormatter())
@@ -15,8 +16,12 @@ builder.Host.UseSerilog((context, services, configuration) => configuration
 
 builder.Services.AddOpenApi();
 builder.Services.AddHealthChecks();
+builder.Services.ConfigureHttpJsonOptions(options =>
+    options.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 
 var app = builder.Build();
+
+app.UseSerilogRequestLogging();
 
 app.MapOpenApi();
 app.MapScalarApiReference();
