@@ -42,3 +42,9 @@ A infraestrutura é aplicada em duas etapas, nesta ordem:
    ```
 
 Ambas as etapas exigem credenciais reais da AWS Academy exportadas no ambiente (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`). Este repositório não gerencia essas credenciais: exporte-as você mesmo antes de rodar `terraform apply`.
+
+**Atenção ao aplicar `infra/bootstrap` pela primeira vez:** contas AWS Academy podem ter uma SCP que nega leitura de object-lock em buckets S3, o que quebra o `apply` do bucket de state logo depois de criado. Ver [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) para o diagnóstico e o contorno (`terraform untaint` + `terraform apply -refresh=false`) antes de tentar de novo.
+
+## Arquitetura
+
+Decisões de design e descobertas feitas durante a implementação (incompatibilidades do AWS Academy, etc.) em [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
