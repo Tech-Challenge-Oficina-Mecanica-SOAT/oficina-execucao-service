@@ -11,4 +11,9 @@
     <ProjectReference Include="..\OficinaExecucao.Application\OficinaExecucao.Application.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="AWSSDK.DynamoDBv2" Version="4.0.103.7" />
+    <PackageReference Include="Microsoft.Extensions.Options" Version="10.0.12" />
+  </ItemGroup>
+
 </Project>
