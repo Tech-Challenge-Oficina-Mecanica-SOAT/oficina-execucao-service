@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using Amazon.DynamoDBv2;
 using Amazon.DynamoDBv2.Model;
@@ -42,24 +43,25 @@ public sealed class DynamoDbExecucaoRepository(IAmazonDynamoDB client, IOptions<
             ["status"] = new(execucao.Status.ToString()),
             ["pecas"] = new(JsonSerializer.Serialize(execucao.Pecas)),
             ["servicos"] = new(JsonSerializer.Serialize(execucao.Servicos)),
-            ["adicionadaEm"] = new(jaExistia ? await ObterAdicionadaEmAsync(execucao.OsId, ct) : DateTimeOffset.UtcNow.ToString("O"))
+            ["adicionadaEm"] = new(jaExistia ? await ObterAdicionadaEmAsync(execucao.OsId, ct) : DateTimeOffset.UtcNow.ToString("O", CultureInfo.InvariantCulture))
         };
 
         if (execucao.DiagnosticoId is { } diagnosticoId) statusItem["diagnosticoId"] = new(diagnosticoId.ToString());
         if (execucao.ExecucaoId is { } execucaoId) statusItem["execucaoId"] = new(execucaoId.ToString());
-        if (execucao.TempoEstimadoHoras is { } tempoEstimado) statusItem["tempoEstimadoHoras"] = new() { N = tempoEstimado.ToString() };
+        if (execucao.TempoEstimadoHoras is { } tempoEstimado) statusItem["tempoEstimadoHoras"] = new() { N = tempoEstimado.ToString(CultureInfo.InvariantCulture) };
         if (execucao.Observacoes is { } observacoes) statusItem["observacoes"] = new(observacoes);
-        if (execucao.IniciadaEm is { } iniciadaEm) statusItem["iniciadaEm"] = new(iniciadaEm.ToString("O"));
-        if (execucao.FinalizadaEm is { } finalizadaEm) statusItem["finalizadaEm"] = new(finalizadaEm.ToString("O"));
-        if (execucao.TempoRealHoras is { } tempoReal) statusItem["tempoRealHoras"] = new() { N = tempoReal.ToString() };
+        if (execucao.IniciadaEm is { } iniciadaEm) statusItem["iniciadaEm"] = new(iniciadaEm.ToString("O", CultureInfo.InvariantCulture));
+        if (execucao.FinalizadaEm is { } finalizadaEm) statusItem["finalizadaEm"] = new(finalizadaEm.ToString("O", CultureInfo.InvariantCulture));
+        if (execucao.TempoRealHoras is { } tempoReal) statusItem["tempoRealHoras"] = new() { N = tempoReal.ToString(CultureInfo.InvariantCulture) };
 
+        var mudouEmFormatado = novaEntrada.MudouEm.ToString("O", CultureInfo.InvariantCulture);
         var historicoItem = new Dictionary<string, AttributeValue>
         {
             ["PK"] = new(Pk(execucao.OsId)),
-            ["SK"] = new($"HISTORICO#{novaEntrada.MudouEm:O}"),
+            ["SK"] = new($"HISTORICO#{mudouEmFormatado}"),
             ["statusAnterior"] = new(novaEntrada.StatusAnterior.ToString()),
             ["statusNovo"] = new(novaEntrada.StatusNovo.ToString()),
-            ["mudouEm"] = new(novaEntrada.MudouEm.ToString("O")),
+            ["mudouEm"] = new(mudouEmFormatado),
             ["origem"] = new(novaEntrada.Origem)
         };
 
@@ -91,7 +93,7 @@ public sealed class DynamoDbExecucaoRepository(IAmazonDynamoDB client, IOptions<
             .Select(item => new HistoricoEntry(
                 Enum.Parse<StatusExecucao>(item["statusAnterior"].S),
                 Enum.Parse<StatusExecucao>(item["statusNovo"].S),
-                DateTimeOffset.Parse(item["mudouEm"].S),
+                DateTimeOffset.Parse(item["mudouEm"].S, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind),
                 item["origem"].S))
             .ToList();
     }
@@ -147,10 +149,11 @@ public sealed class DynamoDbExecucaoRepository(IAmazonDynamoDB client, IOptions<
             item.TryGetValue("execucaoId", out var execucaoId) ? Guid.Parse(execucaoId.S) : null,
             item.TryGetValue("pecas", out var pecas) ? JsonSerializer.Deserialize<IReadOnlyList<ItemPeca>>(pecas.S)! : Array.Empty<ItemPeca>(),
             item.TryGetValue("servicos", out var servicos) ? JsonSerializer.Deserialize<IReadOnlyList<ItemServico>>(servicos.S)! : Array.Empty<ItemServico>(),
-            item.TryGetValue("tempoEstimadoHoras", out var tempoEstimado) ? decimal.Parse(tempoEstimado.N) : null,
+            item.TryGetValue("tempoEstimadoHoras", out var tempoEstimado) ? decimal.Parse(tempoEstimado.N, CultureInfo.InvariantCulture) : null,
             item.TryGetValue("observacoes", out var observacoes) ? observacoes.S : null,
-            item.TryGetValue("iniciadaEm", out var iniciadaEm) ? DateTimeOffset.Parse(iniciadaEm.S) : null,
-            item.TryGetValue("finalizadaEm", out var finalizadaEm) ? DateTimeOffset.Parse(finalizadaEm.S) : null,
-            item.TryGetValue("tempoRealHoras", out var tempoReal) ? decimal.Parse(tempoReal.N) : null);
+            item.TryGetValue("iniciadaEm", out var iniciadaEm) ? DateTimeOffset.Parse(iniciadaEm.S, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind) : null,
+            item.TryGetValue("finalizadaEm", out var finalizadaEm) ? DateTimeOffset.Parse(finalizadaEm.S, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind) : null,
+            item.TryGetValue("tempoRealHoras", out var tempoReal) ? decimal.Parse(tempoReal.N, CultureInfo.InvariantCulture) : null,
+            DateTimeOffset.Parse(item["adicionadaEm"].S, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind));
     }
 }

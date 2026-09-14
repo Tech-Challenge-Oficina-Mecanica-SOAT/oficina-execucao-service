@@ -111,6 +111,33 @@ public class ExecucaoEndpointsTests : IClassFixture<WebApplicationFactory<Progra
     }
 
     [Fact]
+    public async Task PostIniciarReparo_QuandoAguardandoReparo_Retorna204EAtualizaStatus()
+    {
+        var client = CriarClienteAutenticado();
+        var repositorio = (InMemoryExecucaoRepository)_factory.Services.CreateScope().ServiceProvider.GetRequiredService<IExecucaoRepository>();
+        var osId = Guid.NewGuid();
+        repositorio.Adicionar(Execucao.Reidratar(osId, StatusExecucao.AguardandoReparo, Guid.NewGuid(), null,
+            Array.Empty<ItemPeca>(), Array.Empty<ItemServico>(), null, null, null, null, null, DateTimeOffset.UtcNow));
+
+        var response = await client.PostAsync($"/execucao/{osId}/iniciar-reparo", null);
+
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+
+        var consulta = await client.GetFromJsonAsync<ExecucaoResponse>($"/execucao/{osId}");
+        consulta!.Status.Should().Be(nameof(StatusExecucao.EmReparo));
+    }
+
+    [Fact]
+    public async Task PostIniciarReparo_QuandoOsNaoExiste_Retorna404()
+    {
+        var client = CriarClienteAutenticado();
+
+        var response = await client.PostAsync($"/execucao/{Guid.NewGuid()}/iniciar-reparo", null);
+
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
     public async Task GetHistorico_DepoisDeUmaTransicao_RetornaUmaEntrada()
     {
         var client = CriarClienteAutenticado();

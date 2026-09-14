@@ -13,7 +13,7 @@ public static class ExecucaoEndpoints
         grupo.MapGet("/fila", async (StatusExecucao? status, ListarFilaUseCase useCase, CancellationToken ct) =>
         {
             var itens = await useCase.ExecutarAsync(status, ct);
-            return Results.Ok(itens.Select(e => new ItemFilaResponse(e.OsId, e.Status.ToString(), DateTimeOffset.UtcNow)));
+            return Results.Ok(itens.Select(e => new ItemFilaResponse(e.OsId, e.Status.ToString(), e.AdicionadaEm)));
         });
 
         grupo.MapPost("/execucao/{osId:guid}/diagnostico", async (Guid osId, RegistrarDiagnosticoRequest request, RegistrarDiagnosticoUseCase useCase, CancellationToken ct) =>

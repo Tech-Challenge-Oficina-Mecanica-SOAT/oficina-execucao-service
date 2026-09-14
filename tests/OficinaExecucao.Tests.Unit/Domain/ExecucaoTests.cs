@@ -37,7 +37,7 @@ public class ExecucaoTests
     public void RegistrarDiagnostico_APartirDeEmDiagnostico_MudaParaDiagnosticoConcluido()
     {
         var execucao = Execucao.Reidratar(Guid.NewGuid(), StatusExecucao.EmDiagnostico, null, null,
-            Array.Empty<ItemPeca>(), Array.Empty<ItemServico>(), null, null, null, null, null);
+            Array.Empty<ItemPeca>(), Array.Empty<ItemServico>(), null, null, null, null, null, DateTimeOffset.UtcNow);
 
         execucao.RegistrarDiagnostico(Pecas, Servicos, null, null);
 
@@ -53,7 +53,7 @@ public class ExecucaoTests
     public void RegistrarDiagnostico_DeQualquerOutroEstado_LancaTransicaoInvalida(StatusExecucao statusInicial)
     {
         var execucao = Execucao.Reidratar(Guid.NewGuid(), statusInicial, null, null,
-            Array.Empty<ItemPeca>(), Array.Empty<ItemServico>(), null, null, null, null, null);
+            Array.Empty<ItemPeca>(), Array.Empty<ItemServico>(), null, null, null, null, null, DateTimeOffset.UtcNow);
 
         var act = () => execucao.RegistrarDiagnostico(Pecas, Servicos, null, null);
 
@@ -65,7 +65,7 @@ public class ExecucaoTests
     public void IniciarReparo_APartirDeAguardandoReparo_MudaParaEmReparo()
     {
         var execucao = Execucao.Reidratar(Guid.NewGuid(), StatusExecucao.AguardandoReparo, Guid.NewGuid(), null,
-            Pecas, Servicos, 4m, null, null, null, null);
+            Pecas, Servicos, 4m, null, null, null, null, DateTimeOffset.UtcNow);
 
         var historico = execucao.IniciarReparo();
 
@@ -90,7 +90,7 @@ public class ExecucaoTests
     public void Finalizar_APartirDeEmReparo_MudaParaFinalizado()
     {
         var execucao = Execucao.Reidratar(Guid.NewGuid(), StatusExecucao.EmReparo, Guid.NewGuid(), Guid.NewGuid(),
-            Pecas, Servicos, 4m, null, DateTimeOffset.UtcNow, null, null);
+            Pecas, Servicos, 4m, null, DateTimeOffset.UtcNow, null, null, DateTimeOffset.UtcNow);
 
         var historico = execucao.Finalizar(3.5m);
 
@@ -116,7 +116,7 @@ public class ExecucaoTests
     public void Cancelar_QuandoJaFinalizadoOuCancelado_LancaTransicaoInvalida(StatusExecucao statusInicial)
     {
         var execucao = Execucao.Reidratar(Guid.NewGuid(), statusInicial, null, null,
-            Array.Empty<ItemPeca>(), Array.Empty<ItemServico>(), null, null, null, null, null);
+            Array.Empty<ItemPeca>(), Array.Empty<ItemServico>(), null, null, null, null, null, DateTimeOffset.UtcNow);
 
         var act = () => execucao.Cancelar();
 

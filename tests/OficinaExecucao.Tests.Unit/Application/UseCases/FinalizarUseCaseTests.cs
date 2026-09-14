@@ -14,7 +14,7 @@ public class FinalizarUseCaseTests
     {
         var osId = Guid.NewGuid();
         var execucao = Execucao.Reidratar(osId, StatusExecucao.EmReparo, Guid.NewGuid(), Guid.NewGuid(),
-            Array.Empty<ItemPeca>(), Array.Empty<ItemServico>(), null, null, DateTimeOffset.UtcNow, null, null);
+            Array.Empty<ItemPeca>(), Array.Empty<ItemServico>(), null, null, DateTimeOffset.UtcNow, null, null, DateTimeOffset.UtcNow);
         var repositorio = new Mock<IExecucaoRepository>();
         repositorio.Setup(r => r.ObterPorOsIdAsync(osId, It.IsAny<CancellationToken>())).ReturnsAsync(execucao);
         var publisher = new Mock<IEventPublisher>();

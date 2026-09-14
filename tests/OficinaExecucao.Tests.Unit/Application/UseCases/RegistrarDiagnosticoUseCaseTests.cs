@@ -48,7 +48,7 @@ public class RegistrarDiagnosticoUseCaseTests
     {
         var osId = Guid.NewGuid();
         var execucao = Execucao.Reidratar(osId, StatusExecucao.Finalizado, null, null,
-            Array.Empty<ItemPeca>(), Array.Empty<ItemServico>(), null, null, null, null, null);
+            Array.Empty<ItemPeca>(), Array.Empty<ItemServico>(), null, null, null, null, null, DateTimeOffset.UtcNow);
         var repositorio = new Mock<IExecucaoRepository>();
         repositorio.Setup(r => r.ObterPorOsIdAsync(osId, It.IsAny<CancellationToken>())).ReturnsAsync(execucao);
 

@@ -15,6 +15,7 @@ public sealed class Execucao
     public DateTimeOffset? IniciadaEm { get; private set; }
     public DateTimeOffset? FinalizadaEm { get; private set; }
     public decimal? TempoRealHoras { get; private set; }
+    public DateTimeOffset AdicionadaEm { get; private set; }
 
     private Execucao(Guid osId, StatusExecucao status)
     {
@@ -22,7 +23,10 @@ public sealed class Execucao
         Status = status;
     }
 
-    public static Execucao NovaNaFila(Guid osId) => new(osId, StatusExecucao.AguardandoDiagnostico);
+    public static Execucao NovaNaFila(Guid osId) => new(osId, StatusExecucao.AguardandoDiagnostico)
+    {
+        AdicionadaEm = DateTimeOffset.UtcNow
+    };
 
     public static Execucao Reidratar(
         Guid osId,
@@ -35,7 +39,8 @@ public sealed class Execucao
         string? observacoes,
         DateTimeOffset? iniciadaEm,
         DateTimeOffset? finalizadaEm,
-        decimal? tempoRealHoras)
+        decimal? tempoRealHoras,
+        DateTimeOffset adicionadaEm)
     {
         return new Execucao(osId, status)
         {
@@ -47,12 +52,13 @@ public sealed class Execucao
             Observacoes = observacoes,
             IniciadaEm = iniciadaEm,
             FinalizadaEm = finalizadaEm,
-            TempoRealHoras = tempoRealHoras
+            TempoRealHoras = tempoRealHoras,
+            AdicionadaEm = adicionadaEm
         };
     }
 
     public HistoricoEntry RegistrarDiagnostico(
-        IReadOnlyList<ItemPeca> pecas, IReadOnlyList<ItemServico> servicos, decimal? tempoEstimadoHoras, string? observacoes)
+        IReadOnlyList<ItemPeca> pecas, IReadOnlyList<ItemServico> servicos, decimal? tempoEstimadoHoras, string? observacoes, string origem = "api")
     {
         if (Status is not (StatusExecucao.AguardandoDiagnostico or StatusExecucao.EmDiagnostico))
             throw new TransicaoInvalidaException(Status, nameof(RegistrarDiagnostico));
@@ -65,10 +71,10 @@ public sealed class Execucao
         Observacoes = observacoes;
         Status = StatusExecucao.DiagnosticoConcluido;
 
-        return new HistoricoEntry(statusAnterior, Status, DateTimeOffset.UtcNow, "api");
+        return new HistoricoEntry(statusAnterior, Status, DateTimeOffset.UtcNow, origem);
     }
 
-    public HistoricoEntry IniciarReparo()
+    public HistoricoEntry IniciarReparo(string origem = "api")
     {
         if (Status != StatusExecucao.AguardandoReparo)
             throw new TransicaoInvalidaException(Status, nameof(IniciarReparo));
@@ -78,10 +84,10 @@ public sealed class Execucao
         IniciadaEm = DateTimeOffset.UtcNow;
         Status = StatusExecucao.EmReparo;
 
-        return new HistoricoEntry(statusAnterior, Status, DateTimeOffset.UtcNow, "api");
+        return new HistoricoEntry(statusAnterior, Status, DateTimeOffset.UtcNow, origem);
     }
 
-    public HistoricoEntry Finalizar(decimal tempoRealHoras)
+    public HistoricoEntry Finalizar(decimal tempoRealHoras, string origem = "api")
     {
         if (Status != StatusExecucao.EmReparo)
             throw new TransicaoInvalidaException(Status, nameof(Finalizar));
@@ -91,10 +97,10 @@ public sealed class Execucao
         FinalizadaEm = DateTimeOffset.UtcNow;
         Status = StatusExecucao.Finalizado;
 
-        return new HistoricoEntry(statusAnterior, Status, DateTimeOffset.UtcNow, "api");
+        return new HistoricoEntry(statusAnterior, Status, DateTimeOffset.UtcNow, origem);
     }
 
-    public HistoricoEntry Cancelar()
+    public HistoricoEntry Cancelar(string origem = "api")
     {
         if (Status is StatusExecucao.Finalizado or StatusExecucao.Cancelado)
             throw new TransicaoInvalidaException(Status, nameof(Cancelar));
@@ -102,6 +108,6 @@ public sealed class Execucao
         var statusAnterior = Status;
         Status = StatusExecucao.Cancelado;
 
-        return new HistoricoEntry(statusAnterior, Status, DateTimeOffset.UtcNow, "api");
+        return new HistoricoEntry(statusAnterior, Status, DateTimeOffset.UtcNow, origem);
     }
 }

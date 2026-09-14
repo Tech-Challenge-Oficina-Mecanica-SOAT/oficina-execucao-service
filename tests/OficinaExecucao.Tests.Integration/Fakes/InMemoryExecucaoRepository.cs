@@ -7,12 +7,10 @@ public sealed class InMemoryExecucaoRepository : IExecucaoRepository
 {
     private readonly Dictionary<Guid, Execucao> _execucoes = new();
     private readonly Dictionary<Guid, List<HistoricoEntry>> _historico = new();
-    private readonly Dictionary<Guid, DateTimeOffset> _adicionadaEm = new();
 
     public Execucao Adicionar(Execucao execucao)
     {
         _execucoes[execucao.OsId] = execucao;
-        _adicionadaEm[execucao.OsId] = DateTimeOffset.UtcNow;
         _historico[execucao.OsId] = [];
         return execucao;
     }
