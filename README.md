@@ -9,6 +9,22 @@ dotnet build OficinaExecucao.slnx
 dotnet test OficinaExecucao.slnx
 ```
 
+## Testes
+
+Além dos testes de unidade e de integração (mockados), o projeto `OficinaExecucao.Tests.E2E` roda testes end-to-end reais contra um container local do LocalStack (emulador de AWS via Docker: DynamoDB + SQS + SNS) — nada é mockado. Requer Docker rodando localmente.
+
+Rodar só a suíte E2E:
+
+```
+dotnet test tests/OficinaExecucao.Tests.E2E
+```
+
+Rodar tudo exceto a suíte E2E (o que o CI executa):
+
+```
+dotnet test OficinaExecucao.slnx --filter "FullyQualifiedName!~Tests.E2E"
+```
+
 ## Rodando localmente com Docker
 
 ```

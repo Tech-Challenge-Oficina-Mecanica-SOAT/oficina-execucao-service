@@ -16,7 +16,7 @@ public class SmokeTests(LocalStackFixture localStack) : E2ETestBase(localStack)
     }
 
     [Fact]
-    public async Task GetFila_SemNenhumaOs_RetornaListaVazia()
+    public async Task GetFila_ComAApiApontadaParaOLocalStack_Retorna200()
     {
         var response = await Client.GetAsync("/fila");
 

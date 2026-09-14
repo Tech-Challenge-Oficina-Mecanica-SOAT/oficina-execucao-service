@@ -1,6 +1,5 @@
 using System.Net.Http.Json;
 using System.Text.Json;
-using FluentAssertions;
 using Xunit;
 
 namespace OficinaExecucao.Tests.E2E;

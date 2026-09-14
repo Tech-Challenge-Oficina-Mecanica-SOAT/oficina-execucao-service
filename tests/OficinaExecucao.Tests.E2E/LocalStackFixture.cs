@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Text.Json;
 using Amazon.DynamoDBv2;
 using Amazon.DynamoDBv2.Model;
@@ -26,7 +25,6 @@ public sealed class LocalStackFixture : IAsyncLifetime
     public string OsCriadaTopicArn { get; private set; } = string.Empty;
     public string OsCanceladaTopicArn { get; private set; } = string.Empty;
     public string OrcamentoAprovadoTopicArn { get; private set; } = string.Empty;
-    public long WarmupElapsedMilliseconds { get; private set; } = 0;
 
     public async Task InitializeAsync()
     {
@@ -64,7 +62,6 @@ public sealed class LocalStackFixture : IAsyncLifetime
 
     private async Task AqueceEntregaSnsParaSqsAsync(IAmazonSQS sqsClient, IAmazonSimpleNotificationService snsClient, string queueUrl)
     {
-        var sw = Stopwatch.StartNew();
         var messageId = Guid.NewGuid().ToString();
         var throwawayMessage = $"{{\"warmup\": true, \"id\": \"{messageId}\"}}";
 
@@ -130,15 +127,23 @@ public sealed class LocalStackFixture : IAsyncLifetime
             }
         }
 
-        // Verify queue is empty: check both visible and in-flight messages
+        // Verify queue is empty: check both visible and in-flight messages.
+        // Residual limitation: this poll window can't see an SNS delivery still in flight
+        // past it, so in a very rare case a warm-up message could still arrive after this
+        // check passes. Bounded impact: it lacks required fields, so the real consumer's
+        // dispatcher throws, logs, and it lands in the DLQ after 3 retries without breaking
+        // any test.
         var attrs = await sqsClient.GetQueueAttributesAsync(new GetQueueAttributesRequest
         {
             QueueUrl = queueUrl,
             AttributeNames = new List<string> { "ApproximateNumberOfMessages", "ApproximateNumberOfMessagesNotVisible" }
         });
 
-        int visibleCount = int.Parse(attrs.Attributes["ApproximateNumberOfMessages"]);
-        int notVisibleCount = int.Parse(attrs.Attributes["ApproximateNumberOfMessagesNotVisible"]);
+        // Default to "1" (fail toward "not verified") rather than "0" (silently-passing) if
+        // LocalStack ever omits the attribute key, so a missing key still fails loud here
+        // instead of throwing a confusing KeyNotFoundException.
+        int visibleCount = int.Parse(attrs.Attributes.GetValueOrDefault("ApproximateNumberOfMessages", "1"));
+        int notVisibleCount = int.Parse(attrs.Attributes.GetValueOrDefault("ApproximateNumberOfMessagesNotVisible", "1"));
 
         if (visibleCount > 0 || notVisibleCount > 0)
         {
@@ -146,10 +151,6 @@ public sealed class LocalStackFixture : IAsyncLifetime
                 $"Warm-up cleanup failed: queue still contains {visibleCount} visible + {notVisibleCount} not-visible messages. " +
                 $"A malformed warmup message may leak into test assertions. Queue must be provably empty before tests run.");
         }
-
-        sw.Stop();
-        WarmupElapsedMilliseconds = sw.ElapsedMilliseconds;
-        System.Diagnostics.Debug.WriteLine($"LocalStack SNS->SQS warm-up completed and verified clean in {WarmupElapsedMilliseconds}ms");
     }
 
     public async Task DisposeAsync()

@@ -27,11 +27,26 @@ public abstract class E2ETestBase : IAsyncLifetime
         LocalStack = localStack;
     }
 
-    public Task InitializeAsync()
+    public async Task InitializeAsync()
     {
         var credentials = new BasicAWSCredentials("test", "test");
         _snsClient = new AmazonSimpleNotificationServiceClient(credentials, new Amazon.SimpleNotificationService.AmazonSimpleNotificationServiceConfig { ServiceURL = LocalStack.ServiceUrl, UseHttp = true });
         _sqsClient = new AmazonSQSClient(credentials, new Amazon.SQS.AmazonSQSConfig { ServiceURL = LocalStack.ServiceUrl, UseHttp = true });
+
+        // Drain any message left behind by a previously-failed test in this run: a test that
+        // fails mid-sequence can leave its already-published event unread on the shared
+        // verification queue, which the NEXT test's LerProximaMensagemDaFilaDeVerificacaoAsync
+        // call would then misread as its own. Real AWS enforces a 60s cooldown between
+        // PurgeQueue calls on the same queue; if LocalStack does too, swallow it — a briefly
+        // non-empty queue is exactly the pre-existing risk, but a hard failure here would be worse.
+        try
+        {
+            await _sqsClient.PurgeQueueAsync(LocalStack.VerificacaoQueueUrl);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Aviso: falha ao purgar a fila de verificação (seguindo mesmo assim): {ex.Message}");
+        }
 
         _factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
         {
@@ -54,16 +69,15 @@ public abstract class E2ETestBase : IAsyncLifetime
         var settings = _factory.Services.GetRequiredService<IJwtSettings>();
         Client = _factory.CreateClient();
         Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", GerarToken(settings));
-
-        return Task.CompletedTask;
     }
 
-    public Task DisposeAsync()
+    public async Task DisposeAsync()
     {
-        _factory?.Dispose();
+        if (_factory is not null)
+            await _factory.DisposeAsync();
+
         _snsClient?.Dispose();
         _sqsClient?.Dispose();
-        return Task.CompletedTask;
     }
 
     private static string GerarToken(IJwtSettings settings)
@@ -103,16 +117,13 @@ public abstract class E2ETestBase : IAsyncLifetime
     }
 
     /// <summary>
-    /// Poll-until-true helper. Deliberately NOT generic over a return value: an earlier
-    /// draft of this helper was generic (`AguardarAsync&lt;T&gt;` returning `T`), constrained
-    /// `where T : class` — which breaks the moment a caller needs to poll for a `bool` or a
-    /// `JsonElement` result (both value types), since `T?` for a `class`-constrained `T`
-    /// doesn't accept structs, and unwrapping `Nullable&lt;T&gt;` back to `T` inside the method
-    /// doesn't compile generically either. Keeping this non-generic (just "is the condition
-    /// met yet") sidesteps the whole problem: callers fetch whatever they need INSIDE the
-    /// predicate and, if they need the fetched value for assertions afterward, do one more
-    /// direct call after `AguardarAsync` returns (the condition already proved it will
-    /// succeed by then).
+    /// Poll-until-true helper. Deliberately NOT generic over a return value: callers fetch
+    /// whatever they need INSIDE the predicate, and do one more direct call after
+    /// <see cref="AguardarAsync"/> returns if they need that value for assertions.
+    ///
+    /// The 35s default is sized to absorb LocalStack's SNS-&gt;SQS cold-start latency, which
+    /// <see cref="LocalStackFixture"/>'s one-time warm-up already pays for once per test run.
+    /// If that warm-up is ever removed, this default needs to go back up.
     /// </summary>
     protected static async Task AguardarAsync(Func<Task<bool>> condicaoAsync, TimeSpan? timeout = null)
     {

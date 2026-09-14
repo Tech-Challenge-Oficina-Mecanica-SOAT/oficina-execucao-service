@@ -35,7 +35,7 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 
 builder.Services.Configure<DynamoDbOptions>(builder.Configuration.GetSection("DynamoDb"));
 builder.Services.AddSingleton<Amazon.DynamoDBv2.IAmazonDynamoDB>(
-    sp => OficinaExecucao.Infrastructure.DynamoDb.AmazonDynamoDbClientFactory.Create(sp.GetRequiredService<IOptions<DynamoDbOptions>>().Value));
+    sp => AmazonDynamoDbClientFactory.Create(sp.GetRequiredService<IOptions<DynamoDbOptions>>().Value));
 builder.Services.AddScoped<IExecucaoRepository, DynamoDbExecucaoRepository>();
 builder.Services.Configure<SnsOptions>(builder.Configuration.GetSection("Sns"));
 builder.Services.AddSingleton<Amazon.SimpleNotificationService.IAmazonSimpleNotificationService>(
