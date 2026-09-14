@@ -20,6 +20,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\OficinaExecucao.Domain\OficinaExecucao.Domain.csproj" />
     <ProjectReference Include="..\..\src\OficinaExecucao.Application\OficinaExecucao.Application.csproj" />
+    <ProjectReference Include="..\..\src\OficinaExecucao.Infrastructure\OficinaExecucao.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>

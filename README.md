@@ -21,6 +21,19 @@ Depois de subir o container:
 - Health check: `GET http://localhost:5000/health`
 - Documentação interativa (Scalar UI): `http://localhost:5000/scalar/v1`
 
+## Endpoints da API
+
+Além do `/health`, o serviço expõe:
+
+- `GET /fila` — lista a fila de execução, opcionalmente filtrada por `status`
+- `POST /execucao/{osId}/diagnostico` — registra o diagnóstico do mecânico
+- `POST /execucao/{osId}/iniciar-reparo` — inicia o reparo
+- `POST /execucao/{osId}/finalizar` — finaliza o reparo
+- `GET /execucao/{osId}` — estado atual da execução
+- `GET /execucao/{osId}/historico` — histórico de mudanças de estado
+
+Todos exigem autenticação: um JWT Bearer válido (`Authorization: Bearer <token>`) ou uma API Key interna (`X-Internal-Api-Key: <chave>`, configurada em `InternalApi:ApiKey`). Em desenvolvimento local, as chaves de `appsettings.json` (`Jwt:SecretKey`, `InternalApi:ApiKey`) já vêm preenchidas com valores de exemplo — não use em produção sem trocá-las via secret real.
+
 ## Infraestrutura (Terraform)
 
 A infraestrutura é aplicada em duas etapas, nesta ordem:

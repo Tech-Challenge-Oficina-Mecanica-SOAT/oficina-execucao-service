@@ -5,6 +5,7 @@ using Xunit;
 
 namespace OficinaExecucao.Tests.Integration.Api;
 
+[Collection("Integration")]
 public class HealthEndpointTests : IClassFixture<WebApplicationFactory<Program>>
 {
     private readonly HttpClient _client;
