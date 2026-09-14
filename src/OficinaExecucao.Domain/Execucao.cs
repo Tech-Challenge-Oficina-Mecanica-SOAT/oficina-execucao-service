@@ -110,4 +110,15 @@ public sealed class Execucao
 
         return new HistoricoEntry(statusAnterior, Status, DateTimeOffset.UtcNow, origem);
     }
+
+    public HistoricoEntry AprovarOrcamento(string origem = "api")
+    {
+        if (Status != StatusExecucao.DiagnosticoConcluido)
+            throw new TransicaoInvalidaException(Status, nameof(AprovarOrcamento));
+
+        var statusAnterior = Status;
+        Status = StatusExecucao.AguardandoReparo;
+
+        return new HistoricoEntry(statusAnterior, Status, DateTimeOffset.UtcNow, origem);
+    }
 }

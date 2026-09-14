@@ -133,4 +133,35 @@ public class ExecucaoTests
         execucao.Status.Should().Be(StatusExecucao.Cancelado);
         historico.StatusNovo.Should().Be(StatusExecucao.Cancelado);
     }
+
+    [Fact]
+    public void AprovarOrcamento_APartirDeDiagnosticoConcluido_MudaParaAguardandoReparo()
+    {
+        var execucao = Execucao.Reidratar(Guid.NewGuid(), StatusExecucao.DiagnosticoConcluido, Guid.NewGuid(), null,
+            Pecas, Servicos, 4m, null, null, null, null, DateTimeOffset.UtcNow);
+
+        var historico = execucao.AprovarOrcamento();
+
+        execucao.Status.Should().Be(StatusExecucao.AguardandoReparo);
+        historico.StatusAnterior.Should().Be(StatusExecucao.DiagnosticoConcluido);
+        historico.StatusNovo.Should().Be(StatusExecucao.AguardandoReparo);
+    }
+
+    [Theory]
+    [InlineData(StatusExecucao.AguardandoDiagnostico)]
+    [InlineData(StatusExecucao.EmDiagnostico)]
+    [InlineData(StatusExecucao.AguardandoReparo)]
+    [InlineData(StatusExecucao.EmReparo)]
+    [InlineData(StatusExecucao.Finalizado)]
+    [InlineData(StatusExecucao.Cancelado)]
+    public void AprovarOrcamento_DeQualquerOutroEstado_LancaTransicaoInvalida(StatusExecucao statusInicial)
+    {
+        var execucao = Execucao.Reidratar(Guid.NewGuid(), statusInicial, null, null,
+            Array.Empty<ItemPeca>(), Array.Empty<ItemServico>(), null, null, null, null, null, DateTimeOffset.UtcNow);
+
+        var act = () => execucao.AprovarOrcamento();
+
+        act.Should().Throw<TransicaoInvalidaException>()
+            .Which.StatusAtual.Should().Be(statusInicial);
+    }
 }
