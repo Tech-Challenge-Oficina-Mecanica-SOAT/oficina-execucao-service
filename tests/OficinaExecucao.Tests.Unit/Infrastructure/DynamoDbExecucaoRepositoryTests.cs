@@ -78,6 +78,27 @@ public class DynamoDbExecucaoRepositoryTests
     }
 
     [Fact]
+    public async Task SalvarAsync_ComEventId_IncluiOMarcadorDeIdempotenciaNaMesmaTransacao()
+    {
+        var osId = Guid.NewGuid();
+        var execucao = Execucao.NovaNaFila(osId);
+        var historico = new HistoricoEntry(StatusExecucao.AguardandoDiagnostico, StatusExecucao.AguardandoDiagnostico, DateTimeOffset.UtcNow, "evento");
+        TransactWriteItemsRequest? capturado = null;
+        var client = new Mock<IAmazonDynamoDB>();
+        client
+            .Setup(c => c.TransactWriteItemsAsync(It.IsAny<TransactWriteItemsRequest>(), It.IsAny<CancellationToken>()))
+            .Callback<TransactWriteItemsRequest, CancellationToken>((req, _) => capturado = req)
+            .ReturnsAsync(new TransactWriteItemsResponse());
+
+        var repositorio = new DynamoDbExecucaoRepository(client.Object, Options());
+        await repositorio.SalvarAsync(execucao, historico, CancellationToken.None, eventId: "evt-123");
+
+        capturado.Should().NotBeNull();
+        capturado!.TransactItems.Should().HaveCount(3);
+        capturado.TransactItems.Should().Contain(i => i.Put.Item["SK"].S == "HISTORICO#EVT#evt-123");
+    }
+
+    [Fact]
     public async Task EventoJaProcessadoAsync_QuandoItemExiste_RetornaTrue()
     {
         var client = new Mock<IAmazonDynamoDB>();

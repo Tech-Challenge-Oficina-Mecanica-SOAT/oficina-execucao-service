@@ -17,3 +17,8 @@ module "execucao_table" {
   source      = "../../modules/execucao-table"
   environment = var.environment
 }
+
+module "execucao_messaging" {
+  source      = "../../modules/execucao-messaging"
+  environment = var.environment
+}

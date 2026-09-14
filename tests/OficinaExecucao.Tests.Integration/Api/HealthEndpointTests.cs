@@ -1,6 +1,10 @@
 using System.Net;
 using FluentAssertions;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Hosting;
+using OficinaExecucao.Application;
 using Xunit;
 
 namespace OficinaExecucao.Tests.Integration.Api;
@@ -12,7 +16,15 @@ public class HealthEndpointTests : IClassFixture<WebApplicationFactory<Program>>
 
     public HealthEndpointTests(WebApplicationFactory<Program> factory)
     {
-        _client = factory.CreateClient();
+        _client = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureServices(services =>
+            {
+                services.RemoveAll<IHostedService>();
+                services.RemoveAll<IEventPublisher>();
+                services.AddScoped<IEventPublisher, NoOpEventPublisher>();
+            });
+        }).CreateClient();
     }
 
     [Fact]

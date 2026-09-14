@@ -18,7 +18,7 @@ public sealed class InMemoryExecucaoRepository : IExecucaoRepository
     public Task<Execucao?> ObterPorOsIdAsync(Guid osId, CancellationToken ct) =>
         Task.FromResult(_execucoes.TryGetValue(osId, out var execucao) ? execucao : null);
 
-    public Task SalvarAsync(Execucao execucao, HistoricoEntry novaEntrada, CancellationToken ct)
+    public Task SalvarAsync(Execucao execucao, HistoricoEntry novaEntrada, CancellationToken ct, string? eventId = null)
     {
         _execucoes[execucao.OsId] = execucao;
         if (!_historico.TryGetValue(execucao.OsId, out var lista))

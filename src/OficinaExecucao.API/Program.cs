@@ -14,6 +14,7 @@ using OficinaExecucao.Application.UseCases;
 using OficinaExecucao.Domain.Exceptions;
 using OficinaExecucao.Infrastructure.Auth;
 using OficinaExecucao.Infrastructure.DynamoDb;
+using OficinaExecucao.Infrastructure.Messaging;
 
 Log.Logger = new LoggerConfiguration()
     .WriteTo.Console(new CompactJsonFormatter())
@@ -35,13 +36,26 @@ builder.Services.Configure<DynamoDbOptions>(builder.Configuration.GetSection("Dy
 builder.Services.AddSingleton<Amazon.DynamoDBv2.IAmazonDynamoDB>(
     _ => new Amazon.DynamoDBv2.AmazonDynamoDBClient(Amazon.RegionEndpoint.USEast1));
 builder.Services.AddScoped<IExecucaoRepository, DynamoDbExecucaoRepository>();
-builder.Services.AddScoped<IEventPublisher, NoOpEventPublisher>();
+builder.Services.Configure<SnsOptions>(builder.Configuration.GetSection("Sns"));
+builder.Services.AddSingleton<Amazon.SimpleNotificationService.IAmazonSimpleNotificationService>(
+    _ => new Amazon.SimpleNotificationService.AmazonSimpleNotificationServiceClient(Amazon.RegionEndpoint.USEast1));
+builder.Services.AddScoped<IEventPublisher, SnsEventPublisher>();
 builder.Services.AddScoped<ListarFilaUseCase>();
 builder.Services.AddScoped<ConsultarExecucaoUseCase>();
 builder.Services.AddScoped<ObterHistoricoUseCase>();
 builder.Services.AddScoped<RegistrarDiagnosticoUseCase>();
 builder.Services.AddScoped<IniciarReparoUseCase>();
 builder.Services.AddScoped<FinalizarUseCase>();
+
+builder.Services.AddScoped<ProcessarOsCriadaUseCase>();
+builder.Services.AddScoped<ProcessarOsCanceladaUseCase>();
+builder.Services.AddScoped<ProcessarOrcamentoAprovadoUseCase>();
+builder.Services.AddScoped<IMensagemDispatcher, MensagemDispatcher>();
+
+builder.Services.Configure<SqsOptions>(builder.Configuration.GetSection("Sqs"));
+builder.Services.AddSingleton<Amazon.SQS.IAmazonSQS>(
+    _ => new Amazon.SQS.AmazonSQSClient(Amazon.RegionEndpoint.USEast1));
+builder.Services.AddHostedService<SqsConsumerBackgroundService>();
 
 var jwtSettings = new JwtSettings(builder.Configuration);
 builder.Services.AddSingleton<IJwtSettings>(jwtSettings);
