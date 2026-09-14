@@ -5,6 +5,7 @@ using System.Text;
 using System.Text.Json.Serialization;
 using AspNetCore.Authentication.ApiKey;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using OficinaExecucao.API.Configuration;
 using OficinaExecucao.API.Endpoints;
@@ -34,11 +35,11 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 
 builder.Services.Configure<DynamoDbOptions>(builder.Configuration.GetSection("DynamoDb"));
 builder.Services.AddSingleton<Amazon.DynamoDBv2.IAmazonDynamoDB>(
-    _ => new Amazon.DynamoDBv2.AmazonDynamoDBClient(Amazon.RegionEndpoint.USEast1));
+    sp => OficinaExecucao.Infrastructure.DynamoDb.AmazonDynamoDbClientFactory.Create(sp.GetRequiredService<IOptions<DynamoDbOptions>>().Value));
 builder.Services.AddScoped<IExecucaoRepository, DynamoDbExecucaoRepository>();
 builder.Services.Configure<SnsOptions>(builder.Configuration.GetSection("Sns"));
 builder.Services.AddSingleton<Amazon.SimpleNotificationService.IAmazonSimpleNotificationService>(
-    _ => new Amazon.SimpleNotificationService.AmazonSimpleNotificationServiceClient(Amazon.RegionEndpoint.USEast1));
+    sp => AmazonSnsClientFactory.Create(sp.GetRequiredService<IOptions<SnsOptions>>().Value));
 builder.Services.AddScoped<IEventPublisher, SnsEventPublisher>();
 builder.Services.AddScoped<ListarFilaUseCase>();
 builder.Services.AddScoped<ConsultarExecucaoUseCase>();
@@ -54,7 +55,7 @@ builder.Services.AddScoped<IMensagemDispatcher, MensagemDispatcher>();
 
 builder.Services.Configure<SqsOptions>(builder.Configuration.GetSection("Sqs"));
 builder.Services.AddSingleton<Amazon.SQS.IAmazonSQS>(
-    _ => new Amazon.SQS.AmazonSQSClient(Amazon.RegionEndpoint.USEast1));
+    sp => AmazonSqsClientFactory.Create(sp.GetRequiredService<IOptions<SqsOptions>>().Value));
 builder.Services.AddHostedService<SqsConsumerBackgroundService>();
 
 var jwtSettings = new JwtSettings(builder.Configuration);
