@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.Json;
 using Amazon.DynamoDBv2;
 using Amazon.DynamoDBv2.Model;
@@ -25,6 +26,7 @@ public sealed class LocalStackFixture : IAsyncLifetime
     public string OsCriadaTopicArn { get; private set; } = string.Empty;
     public string OsCanceladaTopicArn { get; private set; } = string.Empty;
     public string OrcamentoAprovadoTopicArn { get; private set; } = string.Empty;
+    public long WarmupElapsedMilliseconds { get; private set; } = 0;
 
     public async Task InitializeAsync()
     {
@@ -55,6 +57,59 @@ public sealed class LocalStackFixture : IAsyncLifetime
         OsCriadaTopicArn = await CriarTopicoEAssinarAsync(snsClient, "os-criada", queueArn);
         OsCanceladaTopicArn = await CriarTopicoEAssinarAsync(snsClient, "os-cancelada", queueArn);
         OrcamentoAprovadoTopicArn = await CriarTopicoEAssinarAsync(snsClient, "orcamento-aprovado", queueArn);
+
+        // Warm up LocalStack's SNS->SQS delivery subsystem (lazy-initialized, significant first-time latency)
+        await AqueceEntregaSnsParaSqsAsync(sqsClient, snsClient, queueUrl);
+    }
+
+    private async Task AqueceEntregaSnsParaSqsAsync(IAmazonSQS sqsClient, IAmazonSimpleNotificationService snsClient, string queueUrl)
+    {
+        var sw = Stopwatch.StartNew();
+        var messageId = Guid.NewGuid().ToString();
+        var throwawayMessage = $"{{\"warmup\": true, \"id\": \"{messageId}\"}}";
+
+        // Publish throwaway message to os-criada topic
+        await snsClient.PublishAsync(new PublishRequest
+        {
+            TopicArn = OsCriadaTopicArn,
+            Message = throwawayMessage
+        });
+
+        // Poll queue until message appears (up to 45 seconds)
+        var pollLimit = DateTimeOffset.UtcNow.AddSeconds(45);
+        Message? receivedMessage = null;
+
+        while (DateTimeOffset.UtcNow < pollLimit && receivedMessage == null)
+        {
+            var response = await sqsClient.ReceiveMessageAsync(new ReceiveMessageRequest
+            {
+                QueueUrl = queueUrl,
+                MaxNumberOfMessages = 10,
+                WaitTimeSeconds = 2
+            });
+
+            if (response.Messages?.Count > 0)
+            {
+                // Find our warmup message
+                receivedMessage = response.Messages.FirstOrDefault(m => m.Body.Contains("warmup"));
+                if (receivedMessage != null)
+                {
+                    await sqsClient.DeleteMessageAsync(queueUrl, receivedMessage.ReceiptHandle);
+                    break;
+                }
+                // Put back any other messages
+                foreach (var msg in response.Messages.Where(m => m != receivedMessage))
+                {
+                    await sqsClient.DeleteMessageAsync(queueUrl, msg.ReceiptHandle);
+                }
+            }
+
+            await Task.Delay(200);
+        }
+
+        sw.Stop();
+        WarmupElapsedMilliseconds = sw.ElapsedMilliseconds;
+        System.Diagnostics.Debug.WriteLine($"LocalStack SNS->SQS warm-up completed in {WarmupElapsedMilliseconds}ms");
     }
 
     public async Task DisposeAsync()

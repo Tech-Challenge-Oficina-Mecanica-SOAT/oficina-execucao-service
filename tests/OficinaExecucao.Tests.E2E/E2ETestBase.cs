@@ -116,7 +116,7 @@ public abstract class E2ETestBase : IAsyncLifetime
     /// </summary>
     protected static async Task AguardarAsync(Func<Task<bool>> condicaoAsync, TimeSpan? timeout = null)
     {
-        var limite = DateTimeOffset.UtcNow.Add(timeout ?? TimeSpan.FromSeconds(40));
+        var limite = DateTimeOffset.UtcNow.Add(timeout ?? TimeSpan.FromSeconds(35));
 
         while (DateTimeOffset.UtcNow < limite)
         {
