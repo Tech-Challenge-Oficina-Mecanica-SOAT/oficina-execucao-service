@@ -4,6 +4,7 @@ using FluentAssertions;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Hosting;
 using OficinaExecucao.Application;
 using OficinaExecucao.Application.Configuration;
 using OficinaExecucao.Tests.Integration.Auth;
@@ -23,8 +24,11 @@ public class ExecucaoEndpointsAuthTests : IClassFixture<WebApplicationFactory<Pr
         {
             builder.ConfigureServices(services =>
             {
+                services.RemoveAll<IHostedService>();
                 services.RemoveAll<IExecucaoRepository>();
                 services.AddSingleton<IExecucaoRepository, InMemoryExecucaoRepository>();
+                services.RemoveAll<IEventPublisher>();
+                services.AddScoped<IEventPublisher, NoOpEventPublisher>();
             });
         });
     }

@@ -5,6 +5,7 @@ using FluentAssertions;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Hosting;
 using OficinaExecucao.API.Contracts;
 using OficinaExecucao.Application;
 using OficinaExecucao.Application.Configuration;
@@ -26,8 +27,11 @@ public class ExecucaoEndpointsTests : IClassFixture<WebApplicationFactory<Progra
         {
             builder.ConfigureServices(services =>
             {
+                services.RemoveAll<IHostedService>();
                 services.RemoveAll<IExecucaoRepository>();
                 services.AddSingleton<IExecucaoRepository, InMemoryExecucaoRepository>();
+                services.RemoveAll<IEventPublisher>();
+                services.AddScoped<IEventPublisher, NoOpEventPublisher>();
             });
         });
     }
