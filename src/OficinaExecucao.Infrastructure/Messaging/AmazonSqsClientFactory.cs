@@ -13,6 +13,7 @@ public static class AmazonSqsClientFactory
         {
             config.ServiceURL = options.ServiceUrl;
             config.UseHttp = true;
+            config.AuthenticationRegion = RegionEndpoint.USEast1.SystemName;
         }
 
         return config;

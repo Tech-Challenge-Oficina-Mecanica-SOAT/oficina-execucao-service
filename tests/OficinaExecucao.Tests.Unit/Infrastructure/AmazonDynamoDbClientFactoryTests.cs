@@ -23,5 +23,6 @@ public class AmazonDynamoDbClientFactoryTests
 
         config.ServiceURL.Should().Be("http://localhost:4566/");
         config.UseHttp.Should().BeTrue();
+        config.AuthenticationRegion.Should().Be("us-east-1");
     }
 }
