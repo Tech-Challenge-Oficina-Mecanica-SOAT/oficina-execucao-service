@@ -68,10 +68,11 @@ data "aws_ssm_parameter" "consumed_topic_arns" {
 }
 
 resource "aws_sns_topic_subscription" "consumed" {
-  for_each  = toset(local.consumed_topics)
-  topic_arn = data.aws_ssm_parameter.consumed_topic_arns[each.value].value
-  protocol  = "sqs"
-  endpoint  = aws_sqs_queue.execucao_queue.arn
+  for_each             = toset(local.consumed_topics)
+  topic_arn            = data.aws_ssm_parameter.consumed_topic_arns[each.value].value
+  protocol             = "sqs"
+  endpoint             = aws_sqs_queue.execucao_queue.arn
+  raw_message_delivery = true
 }
 
 resource "aws_sqs_queue_policy" "allow_sns" {

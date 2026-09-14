@@ -27,7 +27,7 @@ public class SnsEventPublisherTests
         });
 
         var publisher = new SnsEventPublisher(client.Object, options);
-        await publisher.PublicarAsync("diagnostico.concluido", new { osId = "abc" }, CancellationToken.None);
+        await publisher.PublicarAsync("diagnostico.concluido", new { osId = "abc", pecas = new[] { new { PecaId = "peca-1", Quantidade = 2 } } }, CancellationToken.None);
 
         capturado.Should().NotBeNull();
         capturado!.TopicArn.Should().Be("arn:aws:sns:us-east-1:123:diagnostico-concluido");
@@ -37,6 +37,7 @@ public class SnsEventPublisherTests
         envelope.RootElement.GetProperty("producer").GetString().Should().Be("execucao-service");
         envelope.RootElement.GetProperty("data").GetProperty("osId").GetString().Should().Be("abc");
         Guid.TryParse(envelope.RootElement.GetProperty("eventId").GetString(), out _).Should().BeTrue();
+        envelope.RootElement.GetProperty("data").GetProperty("pecas")[0].GetProperty("pecaId").GetString().Should().Be("peca-1");
     }
 
     [Fact]

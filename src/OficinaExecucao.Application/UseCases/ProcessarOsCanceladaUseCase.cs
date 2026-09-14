@@ -11,7 +11,10 @@ public sealed class ProcessarOsCanceladaUseCase(IExecucaoRepository repositorio,
         var execucao = await repositorio.ObterPorOsIdAsync(osId, ct);
         if (execucao is null)
         {
-            logger.LogInformation("os.cancelada para OS {OsId} ignorado: execução ainda não existe na tabela.", osId);
+            // Conhecido: SNS não garante ordem entre tópicos diferentes. Se os.cancelada chegar
+            // antes de os.criada ser processado, a OS acaba criada e nunca cancelada. Fix real
+            // (tombstone ou retry limitado) fica para a Semana 4 — ver README.
+            logger.LogWarning("os.cancelada para OS {OsId} ignorado: execução ainda não existe na tabela.", osId);
             return;
         }
 

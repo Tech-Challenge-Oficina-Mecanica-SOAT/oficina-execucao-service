@@ -62,7 +62,9 @@ Ambas as etapas exigem credenciais reais da AWS Academy exportadas no ambiente (
 
 O módulo `execucao-messaging` cria a fila SQS, a DLQ e os 3 tópicos SNS que este serviço publica — essa parte pode ser aplicada junto com o restante (`infra/terraform/envs/homolog` ou `envs/prod`).
 
-As 3 assinaturas SQS⟵SNS que consomem eventos de outros serviços (`os.criada`, `os.cancelada`, `orcamento.aprovado`) dependem de parâmetros no Parameter Store que só existem depois que o OS Service e o Billing Service publicarem os próprios tópicos SNS (a Semana 3 de cada um deles). Enquanto isso não acontecer, o `terraform apply` deste ambiente falha especificamente nessa parte — o restante (tabela DynamoDB, fila, DLQ, tópicos publicados) aplica normalmente. Assim que os outros serviços publicarem, rode `terraform apply` de novo aqui para completar as assinaturas.
+As 3 assinaturas SQS⟵SNS que consomem eventos de outros serviços (`os.criada`, `os.cancelada`, `orcamento.aprovado`) dependem de parâmetros no Parameter Store que só existem depois que o OS Service e o Billing Service publicarem os próprios tópicos SNS (a Semana 3 de cada um deles). Enquanto isso não acontecer, o `terraform apply` deste ambiente falha especificamente nessa parte — o restante (tabela DynamoDB, fila, DLQ, tópicos publicados) aplica normalmente. Assim que os outros serviços publicarem, rode `terraform apply` de novo aqui para completar as assinaturas. As assinaturas usam `raw_message_delivery = true` — o corpo da mensagem SQS é o envelope do evento diretamente, sem o wrapper de notificação do SNS. Os outros serviços do grupo precisam manter essa mesma convenção nas próprias assinaturas.
+
+**Limitação conhecida:** como o SNS não garante ordem de entrega entre tópicos diferentes, se `os.cancelada` chegar antes de `os.criada` ter sido processado para a mesma OS, o cancelamento é ignorado silenciosamente (logado como warning) e a OS acaba criada depois sem nunca ser cancelada. Uma correção real (marcador de "tombstone" ou retry limitado) fica para a Semana 4.
 
 ## Arquitetura
 

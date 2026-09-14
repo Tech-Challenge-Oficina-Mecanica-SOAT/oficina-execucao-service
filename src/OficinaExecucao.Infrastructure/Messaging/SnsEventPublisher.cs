@@ -9,6 +9,11 @@ namespace OficinaExecucao.Infrastructure.Messaging;
 
 public sealed class SnsEventPublisher(IAmazonSimpleNotificationService client, IOptions<SnsOptions> options) : IEventPublisher
 {
+    private static readonly JsonSerializerOptions EnvelopeJsonOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+    };
+
     public async Task PublicarAsync<T>(string eventType, T data, CancellationToken ct)
     {
         if (!options.Value.TopicArns.TryGetValue(eventType, out var topicArn))
@@ -28,7 +33,7 @@ public sealed class SnsEventPublisher(IAmazonSimpleNotificationService client, I
         await client.PublishAsync(new PublishRequest
         {
             TopicArn = topicArn,
-            Message = JsonSerializer.Serialize(envelope)
+            Message = JsonSerializer.Serialize(envelope, EnvelopeJsonOptions)
         }, ct);
     }
 }

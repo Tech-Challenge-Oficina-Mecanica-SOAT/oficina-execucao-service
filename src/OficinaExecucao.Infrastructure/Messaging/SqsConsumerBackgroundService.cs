@@ -24,14 +24,28 @@ public sealed class SqsConsumerBackgroundService(
 
     public async Task ProcessarLoteAsync(CancellationToken ct)
     {
-        var response = await client.ReceiveMessageAsync(new ReceiveMessageRequest
+        ReceiveMessageResponse response;
+        try
         {
-            QueueUrl = options.Value.QueueUrl,
-            MaxNumberOfMessages = 10,
-            WaitTimeSeconds = 20
-        }, ct);
+            response = await client.ReceiveMessageAsync(new ReceiveMessageRequest
+            {
+                QueueUrl = options.Value.QueueUrl,
+                MaxNumberOfMessages = 10,
+                WaitTimeSeconds = 20
+            }, ct);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            return;
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Falha ao receber mensagens da fila; nova tentativa em 5s.");
+            await Task.Delay(TimeSpan.FromSeconds(5), ct);
+            return;
+        }
 
-        foreach (var mensagem in response.Messages)
+        foreach (var mensagem in response.Messages ?? [])
         {
             using var scope = scopeFactory.CreateScope();
             var dispatcher = scope.ServiceProvider.GetRequiredService<IMensagemDispatcher>();

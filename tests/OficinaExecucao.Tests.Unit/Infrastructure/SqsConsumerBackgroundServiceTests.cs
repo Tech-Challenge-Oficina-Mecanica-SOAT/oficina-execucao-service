@@ -65,4 +65,37 @@ public class SqsConsumerBackgroundServiceTests
         await act.Should().NotThrowAsync();
         sqsClient.Verify(c => c.DeleteMessageAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
     }
+
+    [Fact]
+    public async Task ProcessarLoteAsync_QuandoMessagesENull_NaoLancaExcecao()
+    {
+        var sqsClient = new Mock<IAmazonSQS>();
+        sqsClient
+            .Setup(c => c.ReceiveMessageAsync(It.IsAny<ReceiveMessageRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ReceiveMessageResponse { Messages = null! });
+        var (scopeFactory, _) = CriarScopeFactory();
+        var options = Options.Create(new SqsOptions { QueueUrl = "https://sqs.test/queue" });
+
+        var service = new SqsConsumerBackgroundService(sqsClient.Object, options, scopeFactory.Object, NullLogger<SqsConsumerBackgroundService>.Instance);
+        var act = async () => await service.ProcessarLoteAsync(CancellationToken.None);
+
+        await act.Should().NotThrowAsync();
+    }
+
+    [Fact]
+    public async Task ProcessarLoteAsync_QuandoReceiveMessageFalha_NaoLancaExcecao()
+    {
+        var sqsClient = new Mock<IAmazonSQS>();
+        sqsClient
+            .Setup(c => c.ReceiveMessageAsync(It.IsAny<ReceiveMessageRequest>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new Amazon.SQS.AmazonSQSException("falha simulada"));
+        var (scopeFactory, dispatcher) = CriarScopeFactory();
+        var options = Options.Create(new SqsOptions { QueueUrl = "https://sqs.test/queue" });
+
+        var service = new SqsConsumerBackgroundService(sqsClient.Object, options, scopeFactory.Object, NullLogger<SqsConsumerBackgroundService>.Instance);
+        var act = async () => await service.ProcessarLoteAsync(CancellationToken.None);
+
+        await act.Should().NotThrowAsync();
+        dispatcher.Verify(d => d.ProcessarAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
 }
