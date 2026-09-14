@@ -27,13 +27,16 @@ public class FluxoReparoTests(LocalStackFixture localStack) : E2ETestBase(localS
             return r.IsSuccessStatusCode;
         });
 
-        await Client.PostAsJsonAsync($"/execucao/{osId}/diagnostico", new
+        var diagnosticoResponse = await Client.PostAsJsonAsync($"/execucao/{osId}/diagnostico", new
         {
             pecas = Array.Empty<object>(),
             servicos = new[] { new { servicoId = Guid.NewGuid(), quantidade = 1 } },
             tempoEstimadoHoras = 3.0
         });
-        await LerProximaMensagemDaFilaDeVerificacaoAsync();
+        diagnosticoResponse.StatusCode.Should().Be(HttpStatusCode.NoContent);
+
+        var eventoDiagnostico = await LerProximaMensagemDaFilaDeVerificacaoAsync();
+        eventoDiagnostico.RootElement.GetProperty("eventType").GetString().Should().Be("diagnostico.concluido");
 
         await PublicarEventoFakeAsync(LocalStack.OrcamentoAprovadoTopicArn, "orcamento.aprovado", new
         {
@@ -58,8 +61,7 @@ public class FluxoReparoTests(LocalStackFixture localStack) : E2ETestBase(localS
         eventoFinalizada.RootElement.GetProperty("eventType").GetString().Should().Be("execucao.finalizada");
 
         var historico = await Client.GetFromJsonAsync<JsonElement[]>($"/execucao/{osId}/historico");
-        historico!.Select(h => h.GetProperty("statusNovo").GetString()).Should().Contain([
-            "DiagnosticoConcluido", "AguardandoReparo", "EmReparo", "Finalizado"
-        ]);
+        var statusSequence = historico!.Select(h => h.GetProperty("statusNovo").GetString()).ToList();
+        statusSequence.Should().ContainInOrder("DiagnosticoConcluido", "AguardandoReparo", "EmReparo", "Finalizado");
     }
 }
