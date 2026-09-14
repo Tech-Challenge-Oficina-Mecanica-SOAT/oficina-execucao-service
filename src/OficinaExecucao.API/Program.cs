@@ -1,11 +1,18 @@
 using Serilog;
 using Serilog.Formatting.Compact;
 using Scalar.AspNetCore;
+using System.Text;
 using System.Text.Json.Serialization;
+using AspNetCore.Authentication.ApiKey;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
+using OficinaExecucao.API.Configuration;
 using OficinaExecucao.API.Endpoints;
 using OficinaExecucao.Application;
+using OficinaExecucao.Application.Configuration;
 using OficinaExecucao.Application.UseCases;
 using OficinaExecucao.Domain.Exceptions;
+using OficinaExecucao.Infrastructure.Auth;
 using OficinaExecucao.Infrastructure.DynamoDb;
 
 Log.Logger = new LoggerConfiguration()
@@ -36,6 +43,36 @@ builder.Services.AddScoped<RegistrarDiagnosticoUseCase>();
 builder.Services.AddScoped<IniciarReparoUseCase>();
 builder.Services.AddScoped<FinalizarUseCase>();
 
+var jwtSettings = new JwtSettings(builder.Configuration);
+builder.Services.AddSingleton<IJwtSettings>(jwtSettings);
+
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            ValidIssuers = [jwtSettings.Issuer, jwtSettings.LambdaIssuer],
+            ValidAudience = jwtSettings.Audience,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSettings.SecretKey))
+        };
+    })
+    .AddApiKeyInHeader<InternalApiKeyProvider>("ApiKey", options =>
+    {
+        options.Realm = "OficinaExecucao Internal API";
+        options.KeyName = "X-Internal-Api-Key";
+    });
+
+builder.Services.AddAuthorization(options =>
+{
+    options.DefaultPolicy = new Microsoft.AspNetCore.Authorization.AuthorizationPolicyBuilder(JwtBearerDefaults.AuthenticationScheme, "ApiKey")
+        .RequireAuthenticatedUser()
+        .Build();
+});
+
 var app = builder.Build();
 
 app.UseSerilogRequestLogging();
@@ -62,6 +99,9 @@ app.UseExceptionHandler(handlerApp => handlerApp.Run(async context =>
 
     context.Response.StatusCode = StatusCodes.Status500InternalServerError;
 }));
+
+app.UseAuthentication();
+app.UseAuthorization();
 
 app.MapExecucaoEndpoints();
 

@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using FluentAssertions;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -6,7 +7,9 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using OficinaExecucao.API.Contracts;
 using OficinaExecucao.Application;
+using OficinaExecucao.Application.Configuration;
 using OficinaExecucao.Domain;
+using OficinaExecucao.Tests.Integration.Auth;
 using OficinaExecucao.Tests.Integration.Fakes;
 using Xunit;
 
@@ -29,10 +32,18 @@ public class ExecucaoEndpointsTests : IClassFixture<WebApplicationFactory<Progra
         });
     }
 
+    private HttpClient CriarClienteAutenticado()
+    {
+        var client = _factory.CreateClient();
+        var settings = _factory.Services.GetRequiredService<IJwtSettings>();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TestJwtTokenFactory.GerarToken(settings));
+        return client;
+    }
+
     [Fact]
     public async Task PostDiagnostico_QuandoOsExiste_Retorna204EAtualizaStatus()
     {
-        var client = _factory.CreateClient();
+        var client = CriarClienteAutenticado();
         var repositorio = (InMemoryExecucaoRepository)_factory.Services.CreateScope().ServiceProvider.GetRequiredService<IExecucaoRepository>();
         var osId = Guid.NewGuid();
         repositorio.Adicionar(Execucao.NovaNaFila(osId));
@@ -52,7 +63,7 @@ public class ExecucaoEndpointsTests : IClassFixture<WebApplicationFactory<Progra
     [Fact]
     public async Task PostDiagnostico_QuandoOsNaoExiste_Retorna404()
     {
-        var client = _factory.CreateClient();
+        var client = CriarClienteAutenticado();
 
         var response = await client.PostAsJsonAsync($"/execucao/{Guid.NewGuid()}/diagnostico", new RegistrarDiagnosticoRequest
         {
@@ -66,7 +77,7 @@ public class ExecucaoEndpointsTests : IClassFixture<WebApplicationFactory<Progra
     [Fact]
     public async Task PostFinalizar_QuandoNaoEstaEmReparo_Retorna409()
     {
-        var client = _factory.CreateClient();
+        var client = CriarClienteAutenticado();
         var repositorio = (InMemoryExecucaoRepository)_factory.Services.CreateScope().ServiceProvider.GetRequiredService<IExecucaoRepository>();
         var osId = Guid.NewGuid();
         repositorio.Adicionar(Execucao.NovaNaFila(osId));
@@ -79,7 +90,7 @@ public class ExecucaoEndpointsTests : IClassFixture<WebApplicationFactory<Progra
     [Fact]
     public async Task PostDiagnostico_SemPecasNoBody_Retorna400()
     {
-        var client = _factory.CreateClient();
+        var client = CriarClienteAutenticado();
 
         var response = await client.PostAsJsonAsync($"/execucao/{Guid.NewGuid()}/diagnostico", new { servicos = Array.Empty<object>() });
 
@@ -89,7 +100,7 @@ public class ExecucaoEndpointsTests : IClassFixture<WebApplicationFactory<Progra
     [Fact]
     public async Task GetFila_RetornaOsAdicionadas()
     {
-        var client = _factory.CreateClient();
+        var client = CriarClienteAutenticado();
         var repositorio = (InMemoryExecucaoRepository)_factory.Services.CreateScope().ServiceProvider.GetRequiredService<IExecucaoRepository>();
         var osId = Guid.NewGuid();
         repositorio.Adicionar(Execucao.NovaNaFila(osId));
@@ -102,7 +113,7 @@ public class ExecucaoEndpointsTests : IClassFixture<WebApplicationFactory<Progra
     [Fact]
     public async Task GetHistorico_DepoisDeUmaTransicao_RetornaUmaEntrada()
     {
-        var client = _factory.CreateClient();
+        var client = CriarClienteAutenticado();
         var repositorio = (InMemoryExecucaoRepository)_factory.Services.CreateScope().ServiceProvider.GetRequiredService<IExecucaoRepository>();
         var osId = Guid.NewGuid();
         repositorio.Adicionar(Execucao.NovaNaFila(osId));

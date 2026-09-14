@@ -8,7 +8,7 @@ public static class ExecucaoEndpoints
 {
     public static void MapExecucaoEndpoints(this WebApplication app)
     {
-        var grupo = app.MapGroup("");
+        var grupo = app.MapGroup("").RequireAuthorization();
 
         grupo.MapGet("/fila", async (StatusExecucao? status, ListarFilaUseCase useCase, CancellationToken ct) =>
         {
