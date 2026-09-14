@@ -90,14 +90,13 @@ public sealed class LocalStackFixture : IAsyncLifetime
 
             if (response.Messages?.Count > 0)
             {
-                // Find our warmup message
+                // Find our warmup message and delete it
                 receivedMessage = response.Messages.FirstOrDefault(m => m.Body.Contains("warmup"));
                 if (receivedMessage != null)
                 {
                     await sqsClient.DeleteMessageAsync(queueUrl, receivedMessage.ReceiptHandle);
-                    break;
                 }
-                // Put back any other messages
+                // Delete any other messages that arrived (they're not ours, shouldn't happen during warmup)
                 foreach (var msg in response.Messages.Where(m => m != receivedMessage))
                 {
                     await sqsClient.DeleteMessageAsync(queueUrl, msg.ReceiptHandle);
@@ -107,9 +106,50 @@ public sealed class LocalStackFixture : IAsyncLifetime
             await Task.Delay(200);
         }
 
+        // Drain stragglers/duplicates: quick additional receive passes to catch late arrivals or duplicates
+        // (SQS is at-least-once, warmup message could arrive after initial wait, or in duplicate)
+        for (int drainPass = 0; drainPass < 3; drainPass++)
+        {
+            var drainResponse = await sqsClient.ReceiveMessageAsync(new ReceiveMessageRequest
+            {
+                QueueUrl = queueUrl,
+                MaxNumberOfMessages = 10,
+                WaitTimeSeconds = 1
+            });
+
+            if (drainResponse.Messages?.Count > 0)
+            {
+                foreach (var msg in drainResponse.Messages)
+                {
+                    // Delete any warmup messages found during drain
+                    if (msg.Body.Contains("warmup"))
+                    {
+                        await sqsClient.DeleteMessageAsync(queueUrl, msg.ReceiptHandle);
+                    }
+                }
+            }
+        }
+
+        // Verify queue is empty: check both visible and in-flight messages
+        var attrs = await sqsClient.GetQueueAttributesAsync(new GetQueueAttributesRequest
+        {
+            QueueUrl = queueUrl,
+            AttributeNames = new List<string> { "ApproximateNumberOfMessages", "ApproximateNumberOfMessagesNotVisible" }
+        });
+
+        int visibleCount = int.Parse(attrs.Attributes["ApproximateNumberOfMessages"]);
+        int notVisibleCount = int.Parse(attrs.Attributes["ApproximateNumberOfMessagesNotVisible"]);
+
+        if (visibleCount > 0 || notVisibleCount > 0)
+        {
+            throw new InvalidOperationException(
+                $"Warm-up cleanup failed: queue still contains {visibleCount} visible + {notVisibleCount} not-visible messages. " +
+                $"A malformed warmup message may leak into test assertions. Queue must be provably empty before tests run.");
+        }
+
         sw.Stop();
         WarmupElapsedMilliseconds = sw.ElapsedMilliseconds;
-        System.Diagnostics.Debug.WriteLine($"LocalStack SNS->SQS warm-up completed in {WarmupElapsedMilliseconds}ms");
+        System.Diagnostics.Debug.WriteLine($"LocalStack SNS->SQS warm-up completed and verified clean in {WarmupElapsedMilliseconds}ms");
     }
 
     public async Task DisposeAsync()
