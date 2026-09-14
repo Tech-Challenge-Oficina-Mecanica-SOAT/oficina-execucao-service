@@ -58,6 +58,12 @@ Ambas as etapas exigem credenciais reais da AWS Academy exportadas no ambiente (
 
 **Atenção ao aplicar `infra/bootstrap` pela primeira vez:** contas AWS Academy podem ter uma SCP que nega leitura de object-lock em buckets S3, o que quebra o `apply` do bucket de state logo depois de criado. Ver [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) para o diagnóstico e o contorno (`terraform untaint` + `terraform apply -refresh=false`) antes de tentar de novo.
 
+### Mensageria (bloqueado parcialmente)
+
+O módulo `execucao-messaging` cria a fila SQS, a DLQ e os 3 tópicos SNS que este serviço publica — essa parte pode ser aplicada junto com o restante (`infra/terraform/envs/homolog` ou `envs/prod`).
+
+As 3 assinaturas SQS⟵SNS que consomem eventos de outros serviços (`os.criada`, `os.cancelada`, `orcamento.aprovado`) dependem de parâmetros no Parameter Store que só existem depois que o OS Service e o Billing Service publicarem os próprios tópicos SNS (a Semana 3 de cada um deles). Enquanto isso não acontecer, o `terraform apply` deste ambiente falha especificamente nessa parte — o restante (tabela DynamoDB, fila, DLQ, tópicos publicados) aplica normalmente. Assim que os outros serviços publicarem, rode `terraform apply` de novo aqui para completar as assinaturas.
+
 ## Arquitetura
 
 Decisões de design e descobertas feitas durante a implementação (incompatibilidades do AWS Academy, etc.) em [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
