@@ -32,7 +32,7 @@ public sealed class DynamoDbExecucaoRepository(IAmazonDynamoDB client, IOptions<
         return MapParaExecucao(osId, response.Item);
     }
 
-    public async Task SalvarAsync(Execucao execucao, HistoricoEntry novaEntrada, CancellationToken ct)
+    public async Task SalvarAsync(Execucao execucao, HistoricoEntry novaEntrada, CancellationToken ct, string? eventId = null)
     {
         var jaExistia = await ObterPorOsIdAsync(execucao.OsId, ct) is not null;
 
@@ -65,14 +65,30 @@ public sealed class DynamoDbExecucaoRepository(IAmazonDynamoDB client, IOptions<
             ["origem"] = new(novaEntrada.Origem)
         };
 
-        await client.TransactWriteItemsAsync(new TransactWriteItemsRequest
+        var transactItems = new List<TransactWriteItem>
         {
-            TransactItems =
-            [
-                new TransactWriteItem { Put = new Put { TableName = TableName, Item = statusItem } },
-                new TransactWriteItem { Put = new Put { TableName = TableName, Item = historicoItem } }
-            ]
-        }, ct);
+            new() { Put = new Put { TableName = TableName, Item = statusItem } },
+            new() { Put = new Put { TableName = TableName, Item = historicoItem } }
+        };
+
+        if (eventId is not null)
+        {
+            transactItems.Add(new TransactWriteItem
+            {
+                Put = new Put
+                {
+                    TableName = TableName,
+                    Item = new Dictionary<string, AttributeValue>
+                    {
+                        ["PK"] = new(Pk(execucao.OsId)),
+                        ["SK"] = new($"HISTORICO#EVT#{eventId}"),
+                        ["processadoEm"] = new(DateTimeOffset.UtcNow.ToString("O", CultureInfo.InvariantCulture))
+                    }
+                }
+            });
+        }
+
+        await client.TransactWriteItemsAsync(new TransactWriteItemsRequest { TransactItems = transactItems }, ct);
     }
 
     public async Task<IReadOnlyList<HistoricoEntry>> ObterHistoricoAsync(Guid osId, CancellationToken ct)
