@@ -32,7 +32,7 @@ jobs:
         run: dotnet build OficinaExecucao.slnx --no-restore --configuration Release
 
       - name: Test
-        run: dotnet test OficinaExecucao.slnx --no-build --configuration Release --verbosity normal
+        run: dotnet test OficinaExecucao.slnx --no-build --configuration Release --verbosity normal --filter "FullyQualifiedName!~Tests.E2E"
 
   build-docker:
     name: Build & Push Docker Image
