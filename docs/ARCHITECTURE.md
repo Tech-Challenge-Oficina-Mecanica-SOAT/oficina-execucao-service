@@ -46,3 +46,13 @@ Isso funciona porque `-refresh=false` faz o Terraform confiar no estado já salv
 3. Aplique com `terraform apply -refresh=false`.
 
 Rodar `terraform destroy` desse bucket depois também vai precisar de `-refresh=false` pelo mesmo motivo (o destroy também tenta ler o estado atual antes de apagar).
+
+## Descoberta: sessões da AWS Academy são efêmeras — e o nome do bucket de state não é
+
+**Contexto:** cada sessão de lab da AWS Academy é uma conta nova (nada persiste entre sessões — é assim que o grupo sempre gravou os vídeos de entrega, setup do zero a cada gravação). Ao reaplicar `infra/bootstrap` numa sessão nova em 09/11, nada do que existia na sessão de setembro estava lá: nem o bucket de state, nem a tabela de lock, nem a tabela DynamoDB de dados do serviço, nem o cluster EKS do `oficina-infra-k8s`. Esperado.
+
+**O problema:** nomes de bucket S3 são únicos **globalmente**, não por conta. O bucket `oficina-execucao-service-terraform-state` da sessão de setembro continua reservando esse nome mesmo com a conta daquela sessão inacessível — `terraform apply` numa conta nova falha com `BucketAlreadyExists` (409) ao tentar recriar o bucket com o mesmo nome. Não há como "retomar" um nome de bucket de uma conta Academy antiga.
+
+**Contorno usado:** renomeado para `oficina-execucao-service-terraform-state-v2` em `infra/bootstrap/main.tf` e nos dois `backend.tf` (`infra/terraform/envs/homolog` e `envs/prod`). A tabela DynamoDB de lock manteve o nome (`oficina-execucao-service-lock`) — nomes de tabela DynamoDB são únicos só por conta/região, não globalmente, então não colide.
+
+**Implicação para o resto do grupo:** qualquer bucket S3 criado por Terraform num repositório (não só aqui) pode colidir desse jeito se o nome já foi usado numa sessão Academy anterior. Se acontecer: renomear (sufixo `-v2`, `-v3`, etc.) em todos os arquivos que referenciam o nome — normalmente o recurso que cria o bucket e qualquer `backend "s3"` que aponte pra ele, já que blocos de backend do Terraform não aceitam variáveis, só literais.
