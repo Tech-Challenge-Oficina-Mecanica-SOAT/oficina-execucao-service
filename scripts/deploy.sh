@@ -25,6 +25,12 @@ sed "s|__IMAGE__|$IMAGE|g" "$RAIZ/k8s/deployment.yaml" | kubectl apply -f -
 kubectl apply -f k8s/service.yaml
 kubectl apply -f k8s/hpa.yaml
 
+# envFrom só é lido na criação do pod — num re-deploy com a mesma tag de imagem, o
+# apply acima não muda o spec e o rollout não reinicia os pods sozinho, deixando-os
+# com credenciais/segredos antigos mesmo que o Secret tenha sido atualizado. Forçamos
+# o restart para garantir que o pod suba com os valores atuais do Secret.
+kubectl rollout restart deployment/oficina-execucao-service -n oficina
+
 kubectl rollout status deployment/oficina-execucao-service -n oficina --timeout=5m
 
 echo "Deploy concluido. URL interna: http://oficina-execucao-service.oficina.svc.cluster.local"

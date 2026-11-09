@@ -56,4 +56,25 @@ public class HealthEndpointTests : IClassFixture<WebApplicationFactory<Program>>
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
+
+    [Fact]
+    public async Task GetHealthReady_QuandoDynamoDbFalha_Retorna503()
+    {
+        var client = _factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureServices(services =>
+            {
+                var dynamoDbMock = new Mock<IAmazonDynamoDB>();
+                dynamoDbMock
+                    .Setup(c => c.DescribeTableAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+                    .ThrowsAsync(new AmazonDynamoDBException("tabela indisponivel"));
+                services.RemoveAll<IAmazonDynamoDB>();
+                services.AddSingleton(dynamoDbMock.Object);
+            });
+        }).CreateClient();
+
+        var response = await client.GetAsync("/health/ready");
+
+        response.StatusCode.Should().Be(HttpStatusCode.ServiceUnavailable);
+    }
 }

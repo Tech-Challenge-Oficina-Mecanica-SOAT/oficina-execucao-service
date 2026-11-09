@@ -44,12 +44,18 @@ kubectl create secret generic oficina-execucao-secrets \
 
 echo "Secret 'oficina-execucao-secrets' criado/atualizado no namespace 'oficina'."
 
-# oficina-secrets é compartilhado entre serviços (só a chave NEW_RELIC_LICENSE_KEY importa
-# aqui). Se já existir com outras chaves de outro serviço, kubectl apply substitui o objeto
-# inteiro — nesta sessão (só o Execução rodando) isso não é um problema na prática.
-kubectl create secret generic oficina-secrets \
-  --namespace oficina \
-  --from-literal=NEW_RELIC_LICENSE_KEY="${NEW_RELIC_LICENSE_KEY:-}" \
-  --dry-run=client -o yaml | kubectl apply -f -
-
-echo "Secret 'oficina-secrets' criado/atualizado no namespace 'oficina' (NEW_RELIC_LICENSE_KEY)."
+# oficina-secrets é compartilhado entre serviços (o oficina-infra-k8s também cria/atualiza
+# esse mesmo Secret, com as chaves ConnectionStrings__DefaultConnection e Jwt__SecretKey).
+# Por isso aqui só fazemos patch da chave NEW_RELIC_LICENSE_KEY (nunca um create/apply do
+# objeto inteiro, que substituiria o Secret e apagaria as chaves do outro repo) e só quando
+# a variável estiver de fato exportada (caso contrário um create/apply gravaria um valor
+# vazio por cima de uma licença válida já configurada por outro serviço).
+if [[ -n "${NEW_RELIC_LICENSE_KEY:-}" ]]; then
+  kubectl -n oficina patch secret oficina-secrets --type merge \
+    -p "{\"stringData\":{\"NEW_RELIC_LICENSE_KEY\":\"$NEW_RELIC_LICENSE_KEY\"}}" 2>/dev/null \
+  || kubectl -n oficina create secret generic oficina-secrets \
+       --from-literal=NEW_RELIC_LICENSE_KEY="$NEW_RELIC_LICENSE_KEY"
+  echo "Secret 'oficina-secrets' atualizado (NEW_RELIC_LICENSE_KEY)."
+else
+  echo "NEW_RELIC_LICENSE_KEY nao exportada: mantendo o Secret compartilhado 'oficina-secrets' como esta (nao sobrescrevendo)."
+fi
