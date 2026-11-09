@@ -85,6 +85,20 @@ resource "aws_s3_bucket_policy" "terraform_state_logs" {
           ArnLike      = { "aws:SourceArn" = aws_s3_bucket.terraform_state.arn }
           StringEquals = { "aws:SourceAccount" = data.aws_caller_identity.current.account_id }
         }
+      },
+      # Achado SonarCloud terraform:S6249 (MINOR) também se aplica a este bucket.
+      {
+        Sid       = "DenyInsecureTransport"
+        Effect    = "Deny"
+        Principal = "*"
+        Action    = "s3:*"
+        Resource = [
+          aws_s3_bucket.terraform_state_logs.arn,
+          "${aws_s3_bucket.terraform_state_logs.arn}/*"
+        ]
+        Condition = {
+          Bool = { "aws:SecureTransport" = "false" }
+        }
       }
     ]
   })
