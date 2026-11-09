@@ -89,6 +89,10 @@ Ambas as etapas exigem credenciais reais da AWS Academy exportadas no ambiente (
 
 **Atenção ao aplicar `infra/bootstrap` pela primeira vez:** contas AWS Academy podem ter uma SCP que nega leitura de object-lock em buckets S3, o que quebra o `apply` do bucket de state logo depois de criado. Ver [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) para o diagnóstico e o contorno (`terraform untaint` + `terraform apply -refresh=false`) antes de tentar de novo.
 
+## Deploy (Kubernetes)
+
+O serviço roda no cluster EKS compartilhado do grupo (`oficina-infra-k8s`), namespace `oficina`. Manifestos em `k8s/`, scripts em `scripts/deploy.sh` e `scripts/populate-secret.sh`. Passo a passo completo em [docs/deploy.md](docs/deploy.md).
+
 ### Mensageria (bloqueado parcialmente)
 
 O módulo `execucao-messaging` cria a fila SQS, a DLQ e os 3 tópicos SNS que este serviço publica — essa parte pode ser aplicada junto com o restante (`infra/terraform/envs/homolog` ou `envs/prod`).
