@@ -19,11 +19,19 @@ Rodar só a suíte E2E:
 dotnet test tests/OficinaExecucao.Tests.E2E
 ```
 
-Rodar tudo exceto a suíte E2E (o que o CI executa):
+Testes de comportamento (BDD, [Reqnroll](https://reqnroll.net/)) cobrem o caminho feliz da fila de execução, do diagnóstico e da finalização do reparo, batendo nos endpoints REST reais com um repositório e um publicador de eventos fakes (os cenários estão em `tests/OficinaExecucao.Tests.BDD/Features`):
 
 ```
-dotnet test OficinaExecucao.slnx --filter "FullyQualifiedName!~Tests.E2E"
+dotnet test tests/OficinaExecucao.Tests.BDD
 ```
+
+A cobertura de linha combinada de `OficinaExecucao.Tests.Unit` + `OficinaExecucao.Tests.Integration` (mínimo 80%, verificado no CI) é calculada com:
+
+```
+bash scripts/coverage.sh
+```
+
+O CI também roda análise estática e quality gate no SonarCloud a cada PR e push em `main`, quando o repositório tiver `SONAR_TOKEN`/`SONAR_PROJECT_KEY`/`SONAR_ORGANIZATION` configurados — sem essas credenciais, o CI builda e testa normalmente e só pula a análise.
 
 ## Rodando localmente com Docker
 
