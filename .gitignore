@@ -91,6 +91,7 @@ docs/superpowers/
 # Coverage
 coverage-results/
 coverage-report/
+coverage/
 .sonarqube/
 
 # Terraform

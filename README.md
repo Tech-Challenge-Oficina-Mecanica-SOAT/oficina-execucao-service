@@ -19,6 +19,12 @@ Rodar só a suíte E2E:
 dotnet test tests/OficinaExecucao.Tests.E2E
 ```
 
+Rodar tudo exceto a suíte E2E (o que o CI executa, sem precisar de Docker):
+
+```
+dotnet test OficinaExecucao.slnx --filter "FullyQualifiedName!~Tests.E2E"
+```
+
 Testes de comportamento (BDD, [Reqnroll](https://reqnroll.net/)) cobrem o caminho feliz da fila de execução, do diagnóstico e da finalização do reparo, batendo nos endpoints REST reais com um repositório e um publicador de eventos fakes (os cenários estão em `tests/OficinaExecucao.Tests.BDD/Features`):
 
 ```
