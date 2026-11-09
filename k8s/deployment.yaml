@@ -1,0 +1,107 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: oficina-execucao-service
+  namespace: oficina
+  labels:
+    app: oficina-execucao-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: oficina-execucao-service
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: oficina-execucao-service
+    spec:
+      # a API não fala com a API do Kubernetes: não precisa do token da service account dentro do pod
+      automountServiceAccountToken: false
+      imagePullSecrets:
+        - name: ghcr-pull-secret
+      volumes:
+        - name: newrelic-instrumentation
+          emptyDir: {}
+      initContainers:
+        # Copia o agente .NET do New Relic para o volume compartilhado abaixo. A imagem só
+        # empacota os arquivos do agente em /instrumentation; não copia sozinha, precisa do
+        # comando explícito. O chown é necessário porque o container da API roda como appuser.
+        - name: newrelic-agent-init
+          image: newrelic/newrelic-dotnet-init:10.54.0.0
+          command: ["sh", "-c", "cp -a /instrumentation/. /newrelic-instrumentation/ && chown -R 999:999 /newrelic-instrumentation"]
+          volumeMounts:
+            - name: newrelic-instrumentation
+              mountPath: /newrelic-instrumentation
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+      containers:
+        - name: execucao
+          image: __IMAGE__
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 5000
+          volumeMounts:
+            - name: newrelic-instrumentation
+              mountPath: /newrelic-instrumentation
+          envFrom:
+            - secretRef:
+                name: oficina-execucao-secrets
+          env:
+            - name: ASPNETCORE_ENVIRONMENT
+              value: Production
+            # Se NEW_RELIC_LICENSE_KEY vier vazio (Secret sem valor), o agente carrega mas não
+            # reporta nada; não impede a API de rodar normalmente.
+            - name: CORECLR_ENABLE_PROFILING
+              value: "1"
+            - name: CORECLR_PROFILER
+              value: "{36032161-FFC0-4B61-B559-F6C5D41BAE5A}"
+            - name: CORECLR_PROFILER_PATH
+              value: /newrelic-instrumentation/libNewRelicProfiler.so
+            - name: CORECLR_NEWRELIC_HOME
+              value: /newrelic-instrumentation
+            - name: NEW_RELIC_APP_NAME
+              value: oficina-execucao-service
+            - name: NEW_RELIC_LICENSE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: oficina-secrets
+                  key: NEW_RELIC_LICENSE_KEY
+                  optional: true
+          startupProbe:
+            httpGet:
+              path: /health/ready
+              port: http
+            periodSeconds: 5
+            failureThreshold: 30
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: http
+            periodSeconds: 10
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: http
+            periodSeconds: 20
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 100m
+              memory: 192Mi
+              ephemeral-storage: 256Mi
+            limits:
+              cpu: 500m
+              memory: 384Mi
+              ephemeral-storage: 512Mi
