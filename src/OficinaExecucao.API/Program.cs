@@ -5,6 +5,7 @@ using System.Text;
 using System.Text.Json.Serialization;
 using AspNetCore.Authentication.ApiKey;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using OficinaExecucao.API.Configuration;
@@ -29,7 +30,8 @@ builder.Host.UseSerilog((context, services, configuration) => configuration
     .WriteTo.Console(new CompactJsonFormatter()));
 
 builder.Services.AddOpenApi();
-builder.Services.AddHealthChecks();
+builder.Services.AddHealthChecks()
+    .AddCheck<OficinaExecucao.Infrastructure.DynamoDb.DynamoDbHealthCheck>("dynamodb", tags: ["ready"]);
 builder.Services.ConfigureHttpJsonOptions(options =>
     options.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 
@@ -120,7 +122,8 @@ app.UseAuthorization();
 
 app.MapExecucaoEndpoints();
 
-app.MapHealthChecks("/health");
+app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = _ => false });
+app.MapHealthChecks("/health/ready", new HealthCheckOptions { Predicate = check => check.Tags.Contains("ready") });
 
 app.Run();
 

@@ -10,7 +10,7 @@ public class SmokeTests(LocalStackFixture localStack) : E2ETestBase(localStack)
     [Fact]
     public async Task GetHealth_ComAApiApontadaParaOLocalStack_Retorna200()
     {
-        var response = await Client.GetAsync("/health");
+        var response = await Client.GetAsync("/health/live");
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }

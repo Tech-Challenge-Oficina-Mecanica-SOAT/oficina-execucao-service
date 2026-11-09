@@ -1,0 +1,16 @@
+# ClusterIP: os demais serviços ficam no mesmo cluster e namespace e chamam por DNS interno.
+apiVersion: v1
+kind: Service
+metadata:
+  name: oficina-execucao-service
+  namespace: oficina
+  labels:
+    app: oficina-execucao-service
+spec:
+  type: ClusterIP
+  selector:
+    app: oficina-execucao-service
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

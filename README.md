@@ -48,12 +48,13 @@ docker run -d -p 5000:5000 oficina-execucao-service:local
 
 Depois de subir o container:
 
-- Health check: `GET http://localhost:5000/health`
+- Health check (liveness): `GET http://localhost:5000/health/live`
+- Health check (readiness, confere conexão com o DynamoDB): `GET http://localhost:5000/health/ready`
 - Documentação interativa (Scalar UI): `http://localhost:5000/scalar/v1`
 
 ## Endpoints da API
 
-Além do `/health`, o serviço expõe:
+Além de `/health/live` e `/health/ready`, o serviço expõe:
 
 - `GET /fila` — lista a fila de execução, opcionalmente filtrada por `status`
 - `POST /execucao/{osId}/diagnostico` — registra o diagnóstico do mecânico
@@ -95,6 +96,10 @@ O módulo `execucao-messaging` cria a fila SQS, a DLQ e os 3 tópicos SNS que es
 As 3 assinaturas SQS⟵SNS que consomem eventos de outros serviços (`os.criada`, `os.cancelada`, `orcamento.aprovado`) dependem de parâmetros no Parameter Store que só existem depois que o OS Service e o Billing Service publicarem os próprios tópicos SNS (a Semana 3 de cada um deles). Enquanto isso não acontecer, o `terraform apply` deste ambiente falha especificamente nessa parte — o restante (tabela DynamoDB, fila, DLQ, tópicos publicados) aplica normalmente. Assim que os outros serviços publicarem, rode `terraform apply` de novo aqui para completar as assinaturas. As assinaturas usam `raw_message_delivery = true` — o corpo da mensagem SQS é o envelope do evento diretamente, sem o wrapper de notificação do SNS. Os outros serviços do grupo precisam manter essa mesma convenção nas próprias assinaturas.
 
 **Limitação conhecida:** como o SNS não garante ordem de entrega entre tópicos diferentes, se `os.cancelada` chegar antes de `os.criada` ter sido processado para a mesma OS, o cancelamento é ignorado silenciosamente (logado como warning) e a OS acaba criada depois sem nunca ser cancelada. Uma correção real (marcador de "tombstone" ou retry limitado) fica para a Semana 4.
+
+## Deploy (Kubernetes)
+
+O serviço roda no cluster EKS compartilhado do grupo (`oficina-infra-k8s`), namespace `oficina`. Manifestos em `k8s/`, scripts em `scripts/deploy.sh` e `scripts/populate-secret.sh`. Passo a passo completo em [docs/deploy.md](docs/deploy.md).
 
 ## Arquitetura
 
