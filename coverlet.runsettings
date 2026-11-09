@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!--
+  Cobertura de todo o código de produção (Domain, Application, Infrastructure, API).
+  Cada projeto de teste gera o seu relatório; scripts/coverage.sh junta os dois com o
+  ReportGenerator, de modo que uma linha coberta por qualquer um dos dois conta como coberta.
+-->
+<RunSettings>
+  <DataCollectionRunSettings>
+    <DataCollectors>
+      <DataCollector friendlyName="XPlat Code Coverage">
+        <Configuration>
+          <Format>cobertura,opencover</Format>
+          <Include>[OficinaExecucao.Domain]*,[OficinaExecucao.Application]*,[OficinaExecucao.Infrastructure]*,[OficinaExecucao.API]*</Include>
+          <ExcludeByAttribute>GeneratedCodeAttribute,CompilerGeneratedAttribute</ExcludeByAttribute>
+        </Configuration>
+      </DataCollector>
+    </DataCollectors>
+  </DataCollectionRunSettings>
+</RunSettings>
