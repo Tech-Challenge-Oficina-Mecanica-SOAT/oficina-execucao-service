@@ -71,7 +71,7 @@ public class ExecucaoEndpointsAuthTests : IClassFixture<WebApplicationFactory<Pr
     {
         var client = _factory.CreateClient();
 
-        var response = await client.GetAsync("/health");
+        var response = await client.GetAsync("/health/live");
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }

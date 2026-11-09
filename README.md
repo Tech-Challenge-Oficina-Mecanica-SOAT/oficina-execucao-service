@@ -48,12 +48,13 @@ docker run -d -p 5000:5000 oficina-execucao-service:local
 
 Depois de subir o container:
 
-- Health check: `GET http://localhost:5000/health`
+- Health check (liveness): `GET http://localhost:5000/health/live`
+- Health check (readiness, confere conexão com o DynamoDB): `GET http://localhost:5000/health/ready`
 - Documentação interativa (Scalar UI): `http://localhost:5000/scalar/v1`
 
 ## Endpoints da API
 
-Além do `/health`, o serviço expõe:
+Além de `/health/live` e `/health/ready`, o serviço expõe:
 
 - `GET /fila` — lista a fila de execução, opcionalmente filtrada por `status`
 - `POST /execucao/{osId}/diagnostico` — registra o diagnóstico do mecânico
