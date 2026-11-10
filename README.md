@@ -122,12 +122,12 @@ Para um ambiente local completo (LocalStack com DynamoDB, SNS e SQS, mais a API)
 | Integração | `dotnet test tests/OficinaExecucao.Tests.Integration` | Endpoints HTTP reais (autenticação, validação, respostas) com repositório e publicador fakes |
 | BDD | `dotnet test tests/OficinaExecucao.Tests.BDD` | Cenários em Gherkin ([Reqnroll](https://reqnroll.net/)) do caminho feliz da fila, do diagnóstico e da finalização, contra os endpoints REST reais |
 | E2E (LocalStack) | `dotnet test tests/OficinaExecucao.Tests.E2E` | DynamoDB, SQS e SNS reais num container LocalStack, sem mocks (requer Docker) |
-| Tudo, sem E2E | `dotnet test OficinaExecucao.slnx --filter "FullyQualifiedName!~Tests.E2E"` | O que o CI executa; não precisa de Docker |
+| Tudo, sem E2E | `dotnet test OficinaExecucao.slnx --filter "FullyQualifiedName!~Tests.E2E"` | Atalho local para Unit, Integration e BDD de uma vez, sem Docker. O CI roda `bash scripts/coverage.sh` (Unit + Integration) e depois o projeto BDD |
 | Gate de cobertura | `bash scripts/coverage.sh` | Cobertura de linhas de Unit + Integration juntas, mínimo de 80% (falha abaixo disso); relatório em `coverage/report` |
 | SonarCloud | automático no CI (PR e push na `main`) | Análise estática e quality gate; roda só se `SONAR_TOKEN`, `SONAR_PROJECT_KEY` e `SONAR_ORGANIZATION` estiverem configurados |
-| Demo local | `bash demo/demo-happy-path.sh` e `bash demo/demo-rollback.sh` (após subir o ambiente) | A Execução real participando da Saga, com LocalStack; OS e Billing simulados |
-| Demo no EKS | `TARGET=eks bash demo/demo-happy-path.sh` | A Execução real no cluster do AWS Academy, com eventos de entrada injetados na fila real |
-| Fluxo completo | `bash demo/saga-completa.sh happy` e `bash demo/saga-completa.sh rollback` | Uma OS atravessando Cadastros, OS, Execução e Billing reais, até `Concluida` ou até a compensação (`Cancelada`) |
+| Demo local | ver [Demos da Saga](#demos-da-saga) | A Execução real participando da Saga, com LocalStack; OS e Billing simulados |
+| Demo no EKS | ver [Demos da Saga](#demos-da-saga) | A Execução real no cluster do AWS Academy, com eventos de entrada injetados na fila real |
+| Fluxo completo | ver [Demos da Saga](#demos-da-saga) | Uma OS atravessando Cadastros, OS, Execução e Billing reais, até `Concluida` ou até a compensação (`Cancelada`) |
 
 A cobertura exige `dotnet tool install --global dotnet-reportgenerator-globaltool`. Os passos e pré-requisitos das demos estão em [demo/README.md](demo/README.md) e em [docs/fluxo-completo.md](docs/fluxo-completo.md).
 
@@ -157,24 +157,43 @@ A infraestrutura é aplicada em duas etapas, nesta ordem:
    ```bash
    cd infra/bootstrap
    terraform init
-   terraform apply
+   terraform plan -out=tfplan
+   terraform apply tfplan
    ```
 
-2. **`infra/terraform/envs/homolog`** (ou `envs/prod`): provisiona a tabela DynamoDB usada em tempo de execução pelo serviço e a mensageria:
+2. **`infra/terraform/envs/homolog`** (ou `envs/prod`): provisiona a tabela DynamoDB usada em tempo de execução pelo serviço e a mensageria. Numa conta nova, a primeira passada precisa de `-target` (veja Mensageria abaixo):
 
    ```bash
    cd infra/terraform/envs/homolog
    terraform init
-   terraform apply
+   terraform plan -out=tfplan
+   terraform apply tfplan
    ```
 
-Ambas as etapas exigem credenciais reais do AWS Academy exportadas no ambiente (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`). Este repositório não gerencia essas credenciais: exporte-as antes de rodar `terraform apply`. Salve sempre o plano com `-out` e aplique o arquivo salvo.
+Ambas as etapas exigem credenciais reais do AWS Academy exportadas no ambiente (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`). Este repositório não gerencia essas credenciais: exporte-as antes de rodar `terraform apply`. Os blocos acima salvam o plano com `-out` e aplicam o arquivo salvo.
 
 **Atenção ao aplicar `infra/bootstrap` pela primeira vez:** contas do AWS Academy podem ter uma SCP que nega leitura de object-lock em buckets S3, o que quebra o `apply` do bucket de state logo depois de criado. Ver [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) para o diagnóstico e o contorno (`terraform untaint` + `terraform apply -refresh=false`).
 
 ### Mensageria
 
-O módulo `execucao-messaging` cria a fila SQS, a DLQ e os 3 tópicos SNS que este serviço publica. As 3 assinaturas SQS para SNS que consomem eventos de outros serviços (`os.criada`, `os.cancelada`, `orcamento.aprovado`) dependem de parâmetros no Parameter Store que só existem depois que o OS Service e o Billing Service publicarem os próprios tópicos. Enquanto isso não acontecer, o `terraform apply` falha especificamente nessa parte (o restante aplica normalmente); quando os outros serviços publicarem, rode `terraform apply` de novo aqui. As assinaturas usam `raw_message_delivery = true`: o corpo da mensagem SQS é o envelope do evento diretamente, sem o wrapper de notificação do SNS. A ordem completa entre os serviços está em [docs/fluxo-completo.md](docs/fluxo-completo.md).
+O módulo `execucao-messaging` cria a fila SQS, a DLQ e os 3 tópicos SNS que este serviço publica, além de 3 assinaturas SQS para SNS que consomem eventos de outros serviços (`os.criada`, `os.cancelada`, `orcamento.aprovado`). Essas assinaturas leem os ARNs dos tópicos no Parameter Store, e os parâmetros só existem depois que o OS Service e o Billing Service publicarem os próprios tópicos. Enquanto não existirem, um `terraform plan` completo aborta com `ParameterNotFound` e não cria nada. Por isso, numa conta nova, a aplicação tem duas passadas:
+
+1. Primeira passada, só o que independe de outros serviços (tabela, fila, DLQ, tópicos publicados e parâmetros):
+
+   ```bash
+   terraform plan -out=tfplan \
+     -target=module.execucao_table \
+     -target=module.execucao_messaging.aws_sqs_queue.execucao_dlq \
+     -target=module.execucao_messaging.aws_sqs_queue.execucao_queue \
+     -target=module.execucao_messaging.aws_ssm_parameter.queue_url \
+     -target=module.execucao_messaging.aws_sns_topic.published \
+     -target=module.execucao_messaging.aws_ssm_parameter.published_topic_arns
+   terraform apply tfplan
+   ```
+
+2. Segunda passada, depois que OS e Billing aplicarem a mensageria deles: `terraform plan -out=tfplan` e `terraform apply tfplan`, sem `-target`, criam as assinaturas e a policy da fila.
+
+As assinaturas usam `raw_message_delivery = true`: o corpo da mensagem SQS é o envelope do evento diretamente, sem o wrapper de notificação do SNS. A ordem completa entre os serviços está em [docs/fluxo-completo.md](docs/fluxo-completo.md).
 
 **Limitação conhecida:** como o SNS não garante ordem de entrega entre tópicos diferentes, se `os.cancelada` chegar antes de `os.criada` ter sido processado para a mesma OS, o cancelamento é ignorado (logado como warning) e a OS acaba criada depois sem nunca ser cancelada.
 

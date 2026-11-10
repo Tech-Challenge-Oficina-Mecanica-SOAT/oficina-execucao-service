@@ -1,6 +1,6 @@
 # Demos da Saga do Execução Service
 
-Resumo: dois scripts mostram o Execução Service participando da Saga de uma ordem de serviço, de ponta a ponta, em dois alvos: `local` (padrão), tudo na sua máquina com Docker, e `eks`, contra o Execução real deployado no cluster do AWS Academy. A API do Execução, o SNS, o SQS e o DynamoDB são reais nos dois alvos. O OS Service e o Billing Service são simulados em ambos (Wiremock e eventos publicados pelo próprio script; no `eks`, os eventos de entrada são injetados direto na fila real do Execução). O alvo é escolhido com `TARGET=local` ou `TARGET=eks`; sem a variável, vale `local`.
+Resumo: os scripts `demo-happy-path.sh` e `demo-rollback.sh` mostram o Execução Service participando da Saga de uma ordem de serviço, de ponta a ponta, em dois alvos: `local` (padrão), tudo na sua máquina com Docker, e `eks`, contra o Execução real deployado no cluster do AWS Academy. A API do Execução, o SNS, o SQS e o DynamoDB são reais nos dois alvos. O OS Service e o Billing Service são simulados em ambos (Wiremock e eventos publicados pelo próprio script; no `eks`, os eventos de entrada são injetados direto na fila real do Execução). O alvo é escolhido com `TARGET=local` ou `TARGET=eks`; sem a variável, vale `local`.
 
 - `demo/demo-happy-path.sh`: caminho feliz, da OS criada até a execução finalizada.
 - `demo/demo-rollback.sh`: compensação: após o orçamento recusado, o OS Service cancela a OS (simulado) e o mesmo `os.cancelada` entregue 3 vezes gera uma única transição (idempotência).
@@ -52,7 +52,7 @@ Os eventos publicados pelo Execução (`diagnostico.concluido`, `execucao.inicia
 
 ## Por que o alvo `eks` roda assim
 
-No cluster do AWS Academy existe apenas o Execução Service. O motivo de os testes rodarem desse modo:
+Nas demos de um serviço só (`demo-happy-path.sh` e `demo-rollback.sh`), o cluster do AWS Academy tem apenas o Execução Service. O motivo de os testes rodarem desse modo (para rodar os 4 serviços juntos, veja [docs/fluxo-completo.md](../docs/fluxo-completo.md)):
 
 - Cadastros, OS e Billing não estão deployados no cluster e não caberiam nele (o cluster tem um único node `t3.small`). Por isso os eventos de entrada (`os.criada`, `orcamento.aprovado`, `os.cancelada`) são injetados direto na fila real do Execução, e o script avisa na tela a cada injeção.
 - O AWS Academy não permite criar roles IAM nem IRSA. O pod usa as credenciais temporárias da sessão atual do laboratório (cerca de 4 horas), entregues por um secret do Kubernetes. Quando a sessão é renovada, é preciso refazer o deploy (veja o Troubleshooting).
