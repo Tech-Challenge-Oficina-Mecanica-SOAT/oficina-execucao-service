@@ -92,12 +92,14 @@ TARGET=eks AWS_DEFAULT_REGION=us-east-1 bash demo/demo-rollback.sh
 
 O que o script faz, nesta ordem:
 
-1. Confere `aws`, `kubectl` e `curl` e valida a sessão AWS. Se a sessão for inválida, para antes de criar qualquer coisa.
-2. Varre sobras `oficina-demo-probe-*` de execuções interrompidas e aborta se a porta 5002 já estiver respondendo.
-3. Abre `kubectl port-forward svc/oficina-execucao-service 5002:80 -n oficina` e espera `/health/ready` responder 200.
-4. Cria a fila temporária de verificação e a assina nos 3 tópicos de saída.
-5. Executa a Saga: os eventos de entrada são injetados na fila do Execução e os de saída são conferidos na fila temporária.
-6. Ao terminar, falhar ou receber Ctrl+C, remove assinaturas, fila temporária e port-forward.
+1. Confere `aws`, `kubectl` e `curl` no host e valida a sessão AWS. Se algo faltar ou a sessão for inválida, para antes de criar qualquer coisa.
+2. Lê do SSM a URL da fila de entrada do Execução e os ARNs dos 3 tópicos de saída, e lê a API key do secret `oficina-execucao-secrets` do cluster (sem imprimir a chave).
+3. Aborta se a porta 5002 já estiver respondendo (port-forward esquecido), para não falar com o serviço errado.
+4. Instala o `trap` de limpeza, abre `kubectl port-forward svc/oficina-execucao-service 5002:80 -n oficina` e espera até 30 s por `/health/ready` = 200.
+5. Varre sobras `oficina-demo-probe-*` (filas e assinaturas) de execuções interrompidas.
+6. Cria a fila temporária de verificação e a assina nos 3 tópicos de saída.
+7. Executa a Saga: os eventos de entrada são injetados na fila do Execução e os de saída são conferidos na fila temporária.
+8. Ao terminar, falhar ou receber Ctrl+C, remove assinaturas, fila temporária e port-forward.
 
 Para o New Relic mostrar dados, rode os scripts pouco antes de abrir o APM `oficina-execucao-service`: o tráfego gerado pela demo é o que popula as telas.
 
@@ -185,13 +187,19 @@ Se o ambiente ficou inconsistente, recomece do zero com `down -v` (passo 5) e re
 
 **"Sessão AWS inválida ou expirada. Atualize as credenciais do AWS Academy."** As credenciais exportadas no terminal expiraram ou não existem. Renove-as no AWS Academy, exporte de novo e rode o script outra vez. Nada foi criado antes dessa checagem.
 
-**"A porta 5002 já está respondendo (port-forward esquecido?)".** Há um `kubectl port-forward` antigo (ou outro processo) na 5002 e o script aborta de propósito, para não falar com o serviço errado. Encerre o processo e rode de novo:
+**"A porta 5002 já está respondendo (port-forward esquecido?)".** Há um `kubectl port-forward` antigo (ou outro processo) na 5002 e o script aborta de propósito, para não falar com o serviço errado. Encerre o processo e rode de novo.
+
+No Git Bash (Windows), ache o PID de quem escuta na 5002 (última coluna da linha `LISTENING`) e encerre-o:
 
 ```bash
-kill $(pgrep -f "kubectl port-forward")
+netstat -ano | grep ':5002'
 ```
 
-No Windows, finalize o `kubectl.exe` pelo Gerenciador de Tarefas.
+```bash
+taskkill //F //PID <pid>
+```
+
+As barras são duplas no Git Bash. Se nenhum outro `kubectl` estiver em uso, a opção direta é `taskkill //F //IM kubectl.exe`. No Linux ou macOS: `lsof -ti :5002 | xargs kill`.
 
 **Pod com `AccessDenied` no SQS ou no DynamoDB e `0/1`, logo depois de renovar as credenciais.** Ao renovar o laboratório, o AWS Academy cancela as credenciais da sessão anterior (política `voc-cancel-cred`), e o pod, que ainda usa as antigas pelo secret, passa a falhar e fica `0/1`. Com as credenciais novas exportadas, refaça o deploy (veja [docs/deploy.md](../docs/deploy.md)):
 
