@@ -41,6 +41,9 @@ api POST "/execucao/$OS_ID/diagnostico" \
   "{\"pecas\":[{\"pecaId\":\"$PECA_ID\",\"quantidade\":2}],\"servicos\":[{\"servicoId\":\"$SERVICO_ID\",\"quantidade\":1}],\"tempoEstimadoHoras\":3.5,\"observacoes\":\"Troca de pastilhas\"}" >/dev/null \
   || fail "Falha ao registrar diagnostico"
 ok "Diagnostico registrado (HTTP 204)"
+evento="$(esperar_evento diagnostico.concluido "$OS_ID")"
+info "$evento"
+ok "diagnostico.concluido recebido na fila de verificacao (consumido para nao deixar lixo na fila)"
 expect_status "$OS_ID" DiagnosticoConcluido
 
 step "Billing Service: o cliente recusa o orcamento"
