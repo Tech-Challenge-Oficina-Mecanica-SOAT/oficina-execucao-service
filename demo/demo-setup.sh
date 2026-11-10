@@ -3,8 +3,14 @@ set -euo pipefail
 
 # Provisiona tabela, filas e topicos no LocalStack, aquece SNS->SQS e espera a API.
 # Pre-requisito: docker compose -f demo/docker-compose.demo.yml up -d --build
-source "$(dirname "${BASH_SOURCE[0]}")/lib/demo-lib.sh"
 
+# Antes do source: a lib já verifica o ambiente do alvo ao ser carregada
+if [ "${TARGET:-local}" = "eks" ]; then
+  printf '\033[1;31m❌ %s\033[0m\n' "demo-setup.sh é só do alvo local (TARGET=local)." >&2
+  exit 1
+fi
+
+source "$(dirname "${BASH_SOURCE[0]}")/lib/demo-lib.sh"
 TABELA="oficina-execucao-demo"
 
 step "Aguardando o LocalStack ficar pronto"

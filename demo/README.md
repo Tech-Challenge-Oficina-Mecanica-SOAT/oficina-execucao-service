@@ -1,11 +1,13 @@
 # Demos da Saga do Execução Service
 
-Resumo: dois scripts mostram o Execução Service participando da Saga de uma ordem de serviço, de ponta a ponta, na sua máquina. A API do Execução, o SNS, o SQS e o DynamoDB (no LocalStack) são reais. O OS Service e o Billing Service são simulados (Wiremock e eventos publicados pelo próprio script).
+Resumo: dois scripts mostram o Execução Service participando da Saga de uma ordem de serviço, de ponta a ponta, em dois alvos: `local` (padrão), tudo na sua máquina com Docker, e `eks`, contra o Execução real deployado no cluster do AWS Academy. A API do Execução, o SNS, o SQS e o DynamoDB são reais nos dois alvos. O OS Service e o Billing Service são simulados em ambos (Wiremock e eventos publicados pelo próprio script; no `eks`, os eventos de entrada são injetados direto na fila real do Execução). O alvo é escolhido com `TARGET=local` ou `TARGET=eks`; sem a variável, vale `local`.
 
 - `demo/demo-happy-path.sh`: caminho feliz, da OS criada até a execução finalizada.
 - `demo/demo-rollback.sh`: compensação: após o orçamento recusado, o OS Service cancela a OS (simulado) e o mesmo `os.cancelada` entregue 3 vezes gera uma única transição (idempotência).
 
 ## Fluxo da Saga
+
+O diagrama abaixo é a visão do alvo `local`. No alvo `eks`, os serviços simulados são o próprio script: os eventos de entrada são injetados direto na fila SQS real do Execução e a verificação dos eventos de saída usa uma fila temporária.
 
 ```
  [SIMULADO]                 [REAL]                              [SIMULADO]
@@ -38,15 +40,31 @@ Os eventos publicados pelo Execução (`diagnostico.concluido`, `execucao.inicia
 
 ## O que é real e o que é simulado
 
-| Componente | Na demo | Como |
+| Componente | Alvo `local` | Alvo `eks` |
 |---|---|---|
-| API do Execução Service | Real | Container construído do `Dockerfile` do repositório |
-| DynamoDB (fila de execução, histórico, idempotência) | Real | LocalStack |
-| SNS e SQS (consumo e publicação de eventos) | Real | LocalStack, com tópicos, filas e DLQ criados pelo `demo-setup.sh` |
-| OS Service | Simulado | Wiremock responde `POST /ordens-servico`; o script publica `os.criada` e `os.cancelada` |
-| Billing Service | Simulado | Wiremock responde a aprovação do orçamento; o script publica `orcamento.aprovado` |
+| API do Execução Service | Real: container construído do `Dockerfile` do repositório | Real: pod `oficina-execucao-service` do cluster `oficina-eks-homolog`, acessado por `kubectl port-forward` na porta 5002 |
+| DynamoDB (fila de execução, histórico, idempotência) | Real: LocalStack | Real: DynamoDB da conta AWS Academy |
+| SNS e SQS (consumo e publicação de eventos) | Real: LocalStack, com tópicos, filas e DLQ criados pelo `demo-setup.sh` | Real: fila e tópicos do Execução na conta AWS Academy (endereços lidos do SSM) |
+| OS Service | Simulado: Wiremock responde `POST /ordens-servico`; o script publica `os.criada` e `os.cancelada` | Simulado: o id da OS é gerado pelo script e `os.criada` e `os.cancelada` são injetados direto na fila real do Execução |
+| Billing Service | Simulado: Wiremock responde a aprovação do orçamento; o script publica `orcamento.aprovado` | Simulado: o id do orçamento é gerado pelo script e `orcamento.aprovado` é injetado direto na fila real do Execução |
+| Verificação dos eventos de saída | Fila `oficina-execucao-verificacao-queue` criada pelo `demo-setup.sh` | Fila temporária `oficina-demo-probe-*`, criada e removida a cada execução |
+
+## Por que o alvo `eks` roda assim
+
+No cluster do AWS Academy existe apenas o Execução Service. O motivo de os testes rodarem desse modo:
+
+- Cadastros, OS e Billing não estão deployados no cluster e não caberiam nele (o cluster tem um único node `t3.small`). Por isso os eventos de entrada (`os.criada`, `orcamento.aprovado`, `os.cancelada`) são injetados direto na fila real do Execução, e o script avisa na tela a cada injeção.
+- O AWS Academy não permite criar roles IAM nem IRSA. O pod usa as credenciais temporárias da sessão atual do laboratório (cerca de 4 horas), entregues por um secret do Kubernetes. Quando a sessão é renovada, é preciso refazer o deploy (veja o Troubleshooting).
+- A API só tem um `ClusterIP`, sem exposição externa. O acesso é por `kubectl port-forward`, aberto e encerrado pelo próprio script.
+- Como não há consumidores reais dos eventos de saída, o script cria uma fila temporária assinada nos 3 tópicos reais (`diagnostico.concluido`, `execucao.iniciada`, `execucao.finalizada`) e a lê para provar que a publicação aconteceu. A fila e as assinaturas são removidas ao final, inclusive com Ctrl+C.
+
+A API key interna é lida do secret `oficina-execucao-secrets` do cluster e nunca é impressa. Os ids de OS e de orçamento são gerados a cada execução, então rodar de novo é seguro.
+
+Mais detalhes sobre o deploy em [docs/deploy.md](../docs/deploy.md).
 
 ## Pré-requisitos
+
+Alvo `local` (padrão):
 
 - Docker (com Docker Compose) em execução.
 - `curl`.
@@ -54,7 +72,42 @@ Os eventos publicados pelo Execução (`diagnostico.concluido`, `execucao.inicia
 
 Não é preciso `jq`, `uuidgen` nem AWS CLI no host. Os comandos AWS rodam dentro do container do LocalStack.
 
-## Como rodar
+Alvo `eks`:
+
+- `aws` (AWS CLI), `kubectl` e `curl` no host, mais um shell bash.
+- Credenciais válidas do AWS Academy exportadas no terminal e kubeconfig do cluster `oficina-eks-homolog`.
+- O Execução deployado no cluster, conforme [docs/deploy.md](../docs/deploy.md), com o pod `Running 1/1`.
+
+Docker não é necessário no alvo `eks`. Também não há `demo-setup.sh` nem `docker compose`: o script cria e remove sozinho o que precisa.
+
+## Como rodar no alvo `eks`
+
+Execute a partir da raiz do repositório, com as credenciais do AWS Academy exportadas:
+
+```bash
+TARGET=eks AWS_DEFAULT_REGION=us-east-1 bash demo/demo-happy-path.sh
+```
+
+```bash
+TARGET=eks AWS_DEFAULT_REGION=us-east-1 bash demo/demo-rollback.sh
+```
+
+O que o script faz, nesta ordem:
+
+1. Confere `aws`, `kubectl` e `curl` no host e valida a sessão AWS. Se algo faltar ou a sessão for inválida, para antes de criar qualquer coisa.
+2. Lê do SSM a URL da fila de entrada do Execução e os ARNs dos 3 tópicos de saída, e lê a API key do secret `oficina-execucao-secrets` do cluster (sem imprimir a chave).
+3. Aborta se a porta 5002 já estiver respondendo (port-forward esquecido), para não falar com o serviço errado.
+4. Instala o `trap` de limpeza, abre `kubectl port-forward svc/oficina-execucao-service 5002:80 -n oficina` e espera até 30 s por `/health/ready` = 200.
+5. Varre sobras `oficina-demo-probe-*` (filas e assinaturas) de execuções interrompidas.
+6. Cria a fila temporária de verificação e a assina nos 3 tópicos de saída.
+7. Executa a Saga: os eventos de entrada são injetados na fila do Execução e os de saída são conferidos na fila temporária.
+8. Ao terminar, falhar ou receber Ctrl+C, remove assinaturas, fila temporária e port-forward.
+
+Não rode duas demos `eks` em paralelo na mesma conta: a varredura do início de cada execução remove a fila temporária de verificação da outra.
+
+Para o New Relic mostrar dados, rode os scripts pouco antes de abrir o APM `oficina-execucao-service`: o tráfego gerado pela demo é o que popula as telas.
+
+## Como rodar no alvo `local`
 
 Execute a partir da raiz do repositório.
 
@@ -97,6 +150,7 @@ Não rode duas demos em paralelo contra o mesmo ambiente, pois cada script desca
 | Serviço | Porta | Observação |
 |---|---|---|
 | API do Execução | 5000 | Configurável com `API_PORT` |
+| Port-forward do Execução (alvo `eks`) | 5002 | Fixa; o script abre e fecha sozinho |
 | Wiremock | 8080 | Fixa |
 | LocalStack | 4566 | Fixa |
 
@@ -133,6 +187,34 @@ docker compose -f demo/docker-compose.demo.yml logs api
 ```
 
 Se o ambiente ficou inconsistente, recomece do zero com `down -v` (passo 5) e repita os passos 1 e 2.
+
+### Alvo `eks`
+
+**"Sessão AWS inválida ou expirada. Atualize as credenciais do AWS Academy."** As credenciais exportadas no terminal expiraram ou não existem. Renove-as no AWS Academy, exporte de novo e rode o script outra vez. Nada foi criado antes dessa checagem.
+
+**"A porta 5002 já está respondendo (port-forward esquecido?)".** Há um `kubectl port-forward` antigo (ou outro processo) na 5002 e o script aborta de propósito, para não falar com o serviço errado. Encerre o processo e rode de novo.
+
+No Git Bash (Windows), ache o PID de quem escuta na 5002 (última coluna da linha `LISTENING`) e encerre-o:
+
+```bash
+netstat -ano | grep ':5002'
+```
+
+```bash
+taskkill //F //PID <pid>
+```
+
+As barras são duplas no Git Bash. Se nenhum outro `kubectl` estiver em uso, a opção direta é `taskkill //F //IM kubectl.exe`. No Linux: `lsof -ti :5002 | xargs kill`.
+
+**Pod com `AccessDenied` no SQS ou no DynamoDB e `0/1`, logo depois de renovar as credenciais.** Ao renovar o laboratório, o AWS Academy cancela as credenciais da sessão anterior (política `voc-cancel-cred`), e o pod, que ainda usa as antigas pelo secret, passa a falhar e fica `0/1`. Com as credenciais novas exportadas, refaça o deploy (veja [docs/deploy.md](../docs/deploy.md)):
+
+```bash
+./scripts/deploy.sh homolog
+```
+
+**`kubectl get nodes` vazio e pod `Pending`.** O AWS Academy troca o node do cluster aproximadamente a cada hora e, às vezes, o substituto não se registra: o bootstrap do node recebe um deny explícito de uma política da organização em `ec2:DescribeInstances`. Termine a instância EC2 travada para que o autoscaling group lance outra, e espere o node aparecer em `kubectl get nodes`.
+
+**Sobrou uma fila `oficina-demo-probe-*`.** Acontece se o processo foi morto à força. A próxima execução do script varre essas sobras sozinha.
 
 ## Demo do OS Service
 
