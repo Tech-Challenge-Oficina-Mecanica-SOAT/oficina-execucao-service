@@ -8,12 +8,7 @@ DEMO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$DEMO_DIR/lib/demo-lib.sh"
 
 step "Abrir OS (Wiremock simulando o OS Service)"
-resp="$(curl -s -f -X POST "$WIREMOCK_URL/ordens-servico" -H 'Content-Type: application/json' -d '{}')" \
-  || fail "Wiremock nao respondeu em $WIREMOCK_URL/ordens-servico"
-OS_ID="$(printf '%s' "$resp" | json_field id)"
-[ -n "$OS_ID" ] || fail "Resposta do Wiremock sem id: $resp"
-info "$resp"
-ok "OS aberta: $OS_ID"
+abrir_os_simulada
 
 step "OS Service publica os.criada"
 publicar_evento os-criada os.criada "{\"osId\":\"$OS_ID\"}"
@@ -36,10 +31,7 @@ info "$evento"
 ok "diagnostico.concluido recebido na fila de verificacao"
 
 step "Billing Service aprova o orcamento (Wiremock)"
-ORCAMENTO_ID="$(gen_uuid)"
-curl -s -f -o /dev/null -X POST "$WIREMOCK_URL/orcamentos/$ORCAMENTO_ID/aprovar" \
-  || fail "Wiremock nao aprovou o orcamento $ORCAMENTO_ID"
-ok "Orcamento $ORCAMENTO_ID aprovado"
+aprovar_orcamento_simulado
 
 step "Billing Service publica orcamento.aprovado"
 publicar_evento orcamento-aprovado orcamento.aprovado "{\"osId\":\"$OS_ID\",\"orcamentoId\":\"$ORCAMENTO_ID\"}"

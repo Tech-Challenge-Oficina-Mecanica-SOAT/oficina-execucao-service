@@ -14,6 +14,14 @@ export WIREMOCK_URL="http://localhost:8080"
 export API_KEY="execucao-internal-api-key-local-dev"
 export AWS_DEFAULT_REGION="us-east-1"
 
+# Alvo da demo: local (Docker/LocalStack/Wiremock) ou eks (ambiente homolog)
+TARGET="${TARGET:-local}"
+case "$TARGET" in
+  local|eks) ;;
+  *) printf '%s❌ TARGET invalido: "%s". Use local ou eks.%s\n' $'\033[1;31m' "$TARGET" $'\033[0m' >&2; exit 1 ;;
+esac
+export TARGET
+
 VERIF_QUEUE_URL="http://localhost:4566/000000000000/oficina-execucao-verificacao-queue"
 
 # Os caminhos do compose sao relativos a raiz do repositorio
@@ -157,7 +165,7 @@ esperar_evento() {
   fail "Timeout aguardando evento $event_type para a OS $os_id"
 }
 
-verificar_ambiente() {
+verificar_ambiente_local() {
   local rodando svc
   rodando="$(docker compose -f "$COMPOSE_FILE" ps --status running --services 2>/dev/null || true)"
   for svc in localstack wiremock api; do
@@ -165,6 +173,51 @@ verificar_ambiente() {
       fail "Ambiente fora do ar (servico ausente: $svc). Rode: docker compose -f demo/docker-compose.demo.yml up -d --build"
     fi
   done
+}
+
+verificar_ambiente_eks() {
+  fail "TARGET=eks ainda não implementado"
+}
+
+verificar_ambiente() {
+  case "$TARGET" in
+    local) verificar_ambiente_local ;;
+    eks) verificar_ambiente_eks ;;
+  esac
+}
+
+# abrir_os_simulada: define OS_ID (local: Wiremock simulando o OS Service)
+abrir_os_simulada() {
+  local resp
+  case "$TARGET" in
+    local)
+      resp="$(curl -s -f -X POST "$WIREMOCK_URL/ordens-servico" -H 'Content-Type: application/json' -d '{}')" \
+        || fail "Wiremock nao respondeu em $WIREMOCK_URL/ordens-servico"
+      OS_ID="$(printf '%s' "$resp" | json_field id)"
+      [ -n "$OS_ID" ] || fail "Resposta do Wiremock sem id: $resp"
+      info "$resp"
+      ;;
+    eks)
+      OS_ID="$(gen_uuid)"
+      info "O OS Service não existe neste ambiente: o id da OS foi gerado pelo script."
+      ;;
+  esac
+  ok "OS aberta: $OS_ID"
+}
+
+# aprovar_orcamento_simulado: define ORCAMENTO_ID (local: Wiremock simulando o Billing Service)
+aprovar_orcamento_simulado() {
+  ORCAMENTO_ID="$(gen_uuid)"
+  case "$TARGET" in
+    local)
+      curl -s -f -o /dev/null -X POST "$WIREMOCK_URL/orcamentos/$ORCAMENTO_ID/aprovar" \
+        || fail "Wiremock nao aprovou o orcamento $ORCAMENTO_ID"
+      ;;
+    eks)
+      info "O Billing Service não existe neste ambiente: o id do orçamento foi gerado pelo script."
+      ;;
+  esac
+  ok "Orcamento $ORCAMENTO_ID aprovado"
 }
 
 verificar_ambiente

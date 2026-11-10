@@ -16,12 +16,7 @@ fila_contem() {
 }
 
 step "Abrir OS (Wiremock simulando o OS Service)"
-resp="$(curl -s -f -X POST "$WIREMOCK_URL/ordens-servico" -H 'Content-Type: application/json' -d '{}')" \
-  || fail "Wiremock nao respondeu em $WIREMOCK_URL/ordens-servico"
-OS_ID="$(printf '%s' "$resp" | json_field id)"
-[ -n "$OS_ID" ] || fail "Resposta do Wiremock sem id: $resp"
-info "$resp"
-ok "OS aberta: $OS_ID"
+abrir_os_simulada
 
 step "OS Service publica os.criada"
 publicar_evento os-criada os.criada "{\"osId\":\"$OS_ID\"}"
