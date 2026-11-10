@@ -1,0 +1,8 @@
+{
+  "request": { "method": "GET", "urlPathPattern": "/ordens-servico/[0-9a-f-]{36}/historico" },
+  "response": {
+    "status": 200,
+    "headers": { "Content-Type": "application/json" },
+    "body": "[{\"status\":\"AguardandoDiagnostico\",\"em\":\"2026-01-01T00:00:00Z\"}]"
+  }
+}

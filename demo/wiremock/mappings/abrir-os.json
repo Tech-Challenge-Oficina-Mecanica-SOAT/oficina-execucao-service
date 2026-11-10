@@ -1,0 +1,9 @@
+{
+  "request": { "method": "POST", "urlPath": "/ordens-servico" },
+  "response": {
+    "status": 201,
+    "headers": { "Content-Type": "application/json" },
+    "body": "{\"id\":\"{{randomValue type='UUID'}}\",\"status\":\"AguardandoDiagnostico\"}",
+    "transformers": ["response-template"]
+  }
+}

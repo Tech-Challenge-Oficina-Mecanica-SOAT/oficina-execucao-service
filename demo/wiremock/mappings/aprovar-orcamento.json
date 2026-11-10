@@ -1,0 +1,4 @@
+{
+  "request": { "method": "POST", "urlPathPattern": "/orcamentos/[0-9a-f-]{36}/aprovar" },
+  "response": { "status": 204 }
+}

@@ -1,0 +1,9 @@
+{
+  "request": { "method": "GET", "urlPathPattern": "/ordens-servico/[0-9a-f-]{36}" },
+  "response": {
+    "status": 200,
+    "headers": { "Content-Type": "application/json" },
+    "body": "{\"id\":\"{{request.pathSegments.[1]}}\",\"status\":\"AguardandoDiagnostico\"}",
+    "transformers": ["response-template"]
+  }
+}
