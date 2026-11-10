@@ -71,7 +71,10 @@ gen_uuid() {
 }
 
 aws_local() {
-  docker compose -f "$COMPOSE_FILE" exec -T localstack awslocal "$@"
+  case "$TARGET" in
+    local) docker compose -f "$COMPOSE_FILE" exec -T localstack awslocal "$@" ;;
+    eks) aws "$@" ;;
+  esac
 }
 
 topic_arn() { printf 'arn:aws:sns:us-east-1:000000000000:%s\n' "$1"; }
@@ -83,8 +86,20 @@ publicar_evento() {
   local envelope
   envelope="$(printf '{"eventId":"%s","eventType":"%s","eventVersion":"1.0","occurredAt":"%s","correlationId":"%s","producer":"demo-script","data":%s}' \
     "$event_id" "$event_type" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$(gen_uuid)" "$data_json")"
-  aws_local sns publish --topic-arn "$(topic_arn "$topico")" --message "$envelope" >/dev/null \
-    || fail "Falha ao publicar $event_type em $topico"
+  case "$TARGET" in
+    local)
+      aws_local sns publish --topic-arn "$(topic_arn "$topico")" --message "$envelope" >/dev/null \
+        || fail "Falha ao publicar $event_type em $topico"
+      ;;
+    eks)
+      # o topico e ignorado: o evento entra direto na fila de entrada real do Execucao
+      local origem="OS Service"
+      case "$event_type" in orcamento.*) origem="Billing Service" ;; esac
+      aws sqs send-message --queue-url "$EKS_QUEUE_URL" --message-body "$envelope" >/dev/null \
+        || fail "Falha ao injetar $event_type na fila do Execução"
+      info "evento $event_type injetado direto na fila do Execução (no lugar do $origem)"
+      ;;
+  esac
 }
 
 # api <METHOD> <path> [body-json]: imprime o corpo; retorna nao-zero em HTTP >= 400
@@ -175,8 +190,145 @@ verificar_ambiente_local() {
   done
 }
 
+EKS_NAMESPACE="oficina"
+EKS_LOCAL_PORT=5002
+EKS_SSM_PREFIX="/oficina/homolog"
+EKS_TOPICOS=(diagnostico.concluido execucao.iniciada execucao.finalizada)
+EKS_QUEUE_URL=""
+EKS_TOPIC_ARNS=()
+EKS_PF_PID=""
+PROBE_QUEUE_URL=""
+PROBE_SUBS=()
+PROBE_PREFIX="oficina-demo-probe-"
+
+# ssm_valor <nome>: imprime o valor do parametro SSM (falha se ausente)
+ssm_valor() {
+  aws ssm get-parameter --name "$1" --query Parameter.Value --output text 2>/dev/null | tr -d '\r'
+}
+
+# varrer_sobras_eks: remove filas oficina-demo-probe-* e assinaturas delas deixadas por execucoes mortas
+varrer_sobras_eks() {
+  local arn subs sub q
+  for arn in "${EKS_TOPIC_ARNS[@]}"; do
+    subs="$(aws sns list-subscriptions-by-topic --topic-arn "$arn" \
+      --query "Subscriptions[?contains(Endpoint,'$PROBE_PREFIX')].SubscriptionArn" --output text 2>/dev/null | tr -d '\r' | tr '\t' '\n')" || subs=""
+    for sub in $subs; do
+      case "$sub" in arn:aws:sns:*) aws sns unsubscribe --subscription-arn "$sub" >/dev/null 2>&1 || true ;; esac
+    done
+  done
+  for q in $(aws sqs list-queues --queue-name-prefix "$PROBE_PREFIX" --query 'QueueUrls[]' --output text 2>/dev/null | tr -d '\r' | tr '\t' '\n'); do
+    case "$q" in http*) aws sqs delete-queue --queue-url "$q" >/dev/null 2>&1 || true ;; esac
+  done
+  return 0
+}
+
+# limpar_eks: idempotente; cancela assinaturas, apaga a fila de verificacao e encerra o port-forward
+limpar_eks() {
+  local sub winpid
+  if [ "${#PROBE_SUBS[@]}" -gt 0 ] || [ -n "$PROBE_QUEUE_URL" ] || [ -n "$EKS_PF_PID" ]; then
+    info "Limpando recursos temporários da demo (assinaturas, fila de verificação, port-forward)..."
+  fi
+  for sub in "${PROBE_SUBS[@]}"; do
+    aws sns unsubscribe --subscription-arn "$sub" >/dev/null 2>&1 || true
+  done
+  PROBE_SUBS=()
+  if [ -n "$PROBE_QUEUE_URL" ]; then
+    aws sqs delete-queue --queue-url "$PROBE_QUEUE_URL" >/dev/null 2>&1 || true
+    PROBE_QUEUE_URL=""
+  fi
+  if [ -n "$EKS_PF_PID" ]; then
+    # no Git Bash o kubectl.exe tem PID do Windows distinto; captura antes do kill
+    winpid="$(ps -p "$EKS_PF_PID" 2>/dev/null | awk 'NR==2{print $4}')" || winpid=""
+    kill "$EKS_PF_PID" >/dev/null 2>&1 || true
+    sleep 1
+    if kill -0 "$EKS_PF_PID" >/dev/null 2>&1; then
+      kill -9 "$EKS_PF_PID" >/dev/null 2>&1 || true
+      if [ -n "$winpid" ] && command -v taskkill >/dev/null 2>&1; then
+        taskkill //F //PID "$winpid" >/dev/null 2>&1 || true
+      fi
+    fi
+    EKS_PF_PID=""
+  fi
+  return 0
+}
+
 verificar_ambiente_eks() {
-  fail "TARGET=eks ainda não implementado"
+  local faltando="" cmd i code nome q_arn policy attrs sub
+  for cmd in aws kubectl curl; do
+    command -v "$cmd" >/dev/null 2>&1 || faltando="$faltando $cmd"
+  done
+  [ -z "$faltando" ] || fail "Pré-requisitos ausentes no host:$faltando"
+
+  aws sts get-caller-identity >/dev/null 2>&1 \
+    || fail "Sessão AWS inválida ou expirada. Atualize as credenciais do AWS Academy."
+  ok "Sessão AWS válida"
+
+  EKS_QUEUE_URL="$(ssm_valor "$EKS_SSM_PREFIX/execucao/queue-url")" || EKS_QUEUE_URL=""
+  [ -n "$EKS_QUEUE_URL" ] && [ "$EKS_QUEUE_URL" != "None" ] \
+    || fail "Não consegui ler $EKS_SSM_PREFIX/execucao/queue-url no SSM (o deploy do Execução existe?)."
+  EKS_TOPIC_ARNS=()
+  for nome in "${EKS_TOPICOS[@]}"; do
+    q_arn="$(ssm_valor "$EKS_SSM_PREFIX/messaging/topics/$nome/arn")" || q_arn=""
+    [ -n "$q_arn" ] && [ "$q_arn" != "None" ] \
+      || fail "Não consegui ler o ARN do tópico $nome no SSM ($EKS_SSM_PREFIX/messaging/topics/$nome/arn)."
+    EKS_TOPIC_ARNS+=("$q_arn")
+  done
+
+  # a chave nunca e impressa
+  API_KEY="$(kubectl get secret oficina-execucao-secrets -n "$EKS_NAMESPACE" \
+    -o jsonpath='{.data.InternalApi__ApiKey}' 2>/dev/null | base64 -d 2>/dev/null | tr -d '\r\n')" || API_KEY=""
+  [ -n "$API_KEY" ] \
+    || fail "Não consegui ler a chave InternalApi__ApiKey do secret oficina-execucao-secrets (kubectl aponta para o cluster certo?)."
+  export API_KEY
+
+  if curl -s -o /dev/null --max-time 2 "http://localhost:$EKS_LOCAL_PORT/" 2>/dev/null; then
+    fail "A porta $EKS_LOCAL_PORT já está respondendo (port-forward esquecido?). Encerre o processo que a usa e rode de novo: não vou falar com um serviço desconhecido."
+  fi
+
+  # trap antes de abrir qualquer acesso/recurso: Ctrl+C ou falha em qualquer ponto limpa tudo
+  trap limpar_eks EXIT
+  trap 'exit 130' INT TERM
+
+  info "Abrindo port-forward svc/oficina-execucao-service $EKS_LOCAL_PORT:80 (namespace $EKS_NAMESPACE)..."
+  kubectl port-forward svc/oficina-execucao-service "$EKS_LOCAL_PORT:80" -n "$EKS_NAMESPACE" >/dev/null 2>&1 &
+  EKS_PF_PID=$!
+  code=""
+  for i in $(seq 1 30); do
+    code="$(curl -s -o /dev/null --max-time 2 -w '%{http_code}' "http://localhost:$EKS_LOCAL_PORT/health/ready" 2>/dev/null || true)"
+    [ "$code" = "200" ] && break
+    sleep 1
+  done
+  [ "$code" = "200" ] || fail "O serviço não ficou pronto em 30 s via port-forward (/health/ready retornou '${code:-sem resposta}')."
+  ok "Execução API acessível em http://localhost:$EKS_LOCAL_PORT (/health/ready = 200)"
+
+  varrer_sobras_eks
+
+  nome="${PROBE_PREFIX}$(gen_uuid | cut -c1-8)"
+  PROBE_QUEUE_URL="$(aws sqs create-queue --queue-name "$nome" --query QueueUrl --output text 2>/dev/null | tr -d '\r')" || PROBE_QUEUE_URL=""
+  [ -n "$PROBE_QUEUE_URL" ] && [ "$PROBE_QUEUE_URL" != "None" ] || { PROBE_QUEUE_URL=""; fail "Não consegui criar a fila de verificação $nome."; }
+  q_arn="$(aws sqs get-queue-attributes --queue-url "$PROBE_QUEUE_URL" --attribute-names QueueArn \
+    --query Attributes.QueueArn --output text 2>/dev/null | tr -d '\r')" || q_arn=""
+  [ -n "$q_arn" ] && [ "$q_arn" != "None" ] || fail "Não consegui obter o ARN da fila de verificação."
+
+  policy="$(printf '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Service":"sns.amazonaws.com"},"Action":"sqs:SendMessage","Resource":"%s","Condition":{"ArnEquals":{"aws:SourceArn":["%s","%s","%s"]}}}]}' \
+    "$q_arn" "${EKS_TOPIC_ARNS[0]}" "${EKS_TOPIC_ARNS[1]}" "${EKS_TOPIC_ARNS[2]}")"
+  attrs="{\"Policy\":\"${policy//\"/\\\"}\"}"
+  aws sqs set-queue-attributes --queue-url "$PROBE_QUEUE_URL" --attributes "$attrs" >/dev/null \
+    || fail "Não consegui aplicar a policy na fila de verificação."
+
+  for nome in "${EKS_TOPIC_ARNS[@]}"; do
+    sub="$(aws sns subscribe --topic-arn "$nome" --protocol sqs --notification-endpoint "$q_arn" \
+      --attributes RawMessageDelivery=true --query SubscriptionArn --output text 2>/dev/null | tr -d '\r')" || sub=""
+    case "$sub" in
+      arn:aws:sns:*) PROBE_SUBS+=("$sub") ;;
+      *) fail "Não consegui assinar a fila de verificação no tópico $nome." ;;
+    esac
+  done
+
+  API_URL="http://localhost:$EKS_LOCAL_PORT"
+  export API_URL
+  VERIF_QUEUE_URL="$PROBE_QUEUE_URL"
+  ok "Fila de verificação temporária criada e assinada nos 3 tópicos de saída"
 }
 
 verificar_ambiente() {
@@ -212,12 +364,13 @@ aprovar_orcamento_simulado() {
     local)
       curl -s -f -o /dev/null -X POST "$WIREMOCK_URL/orcamentos/$ORCAMENTO_ID/aprovar" \
         || fail "Wiremock nao aprovou o orcamento $ORCAMENTO_ID"
+      ok "Orcamento $ORCAMENTO_ID aprovado"
       ;;
     eks)
       info "O Billing Service não existe neste ambiente: o id do orçamento foi gerado pelo script."
+      ok "Orçamento $ORCAMENTO_ID gerado (a aprovação será o evento injetado a seguir)"
       ;;
   esac
-  ok "Orcamento $ORCAMENTO_ID aprovado"
 }
 
 verificar_ambiente
