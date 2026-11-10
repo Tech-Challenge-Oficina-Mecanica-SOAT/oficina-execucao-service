@@ -39,6 +39,8 @@ bash scripts/coverage.sh
 
 O CI também roda análise estática e quality gate no SonarCloud a cada PR e push em `main`, quando o repositório tiver `SONAR_TOKEN`/`SONAR_PROJECT_KEY`/`SONAR_ORGANIZATION` configurados — sem essas credenciais, o CI builda e testa normalmente e só pula a análise.
 
+Quando a variável `DEPLOY_HOMOLOG=true` está definida, o pipeline também implanta a imagem recém-publicada no cluster de homolog depois que os testes passam (ver [docs/deploy.md](docs/deploy.md)).
+
 ## Rodando localmente com Docker
 
 ```

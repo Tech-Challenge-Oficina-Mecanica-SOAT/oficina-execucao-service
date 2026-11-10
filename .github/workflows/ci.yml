@@ -143,3 +143,78 @@ jobs:
       - name: Validate
         run: terraform validate
         working-directory: ${{ matrix.dir }}
+
+  deploy-homolog:
+    name: Deploy Kubernetes (homolog)
+    runs-on: ubuntu-latest
+    needs: [build-and-test, build-docker, terraform-validate]
+    # Opt-in: as credenciais do AWS Academy expiram em ~4h e precisam ser coladas
+    # nos secrets do GitHub antes de cada uso. Ative com a variável DEPLOY_HOMOLOG=true.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.DEPLOY_HOMOLOG == 'true'
+    environment: homolog
+    permissions:
+      contents: read
+    concurrency:
+      group: deploy-homolog
+      cancel-in-progress: false
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Deploy no cluster (homolog)
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
+          AWS_DEFAULT_REGION: us-east-1
+          NEW_RELIC_LICENSE_KEY: ${{ secrets.NEW_RELIC_LICENSE_KEY }}
+          GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
+          GHCR_PAT: ${{ secrets.GHCR_PAT }}
+          IMAGE_REPO: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          : "${AWS_ACCESS_KEY_ID:?Secret AWS_ACCESS_KEY_ID vazio no environment homolog}"
+          : "${AWS_SECRET_ACCESS_KEY:?Secret AWS_SECRET_ACCESS_KEY vazio no environment homolog}"
+          : "${AWS_SESSION_TOKEN:?Secret AWS_SESSION_TOKEN vazio (credenciais do AWS Academy expiram em ~4h, renove)}"
+          : "${GHCR_USERNAME:?Secret GHCR_USERNAME vazio no environment homolog}"
+          : "${GHCR_PAT:?Secret GHCR_PAT vazio no environment homolog}"
+          : "${NEW_RELIC_LICENSE_KEY:?Secret NEW_RELIC_LICENSE_KEY vazio no environment homolog}"
+
+          # Mesma tag publicada pelo build-docker (metadata-action: type=sha,prefix=sha-, 7 caracteres)
+          IMAGE="$(echo "$IMAGE_REPO" | tr '[:upper:]' '[:lower:]'):sha-${COMMIT_SHA:0:7}"
+          export IMAGE
+          echo "Imagem a implantar: $IMAGE"
+
+          # O pull secret precisa existir antes do rollout, então o kubeconfig é configurado aqui
+          # (o deploy.sh repete esse passo, sem efeito colateral).
+          CLUSTER_NAME=$(aws ssm get-parameter --name "/oficina/homolog/k8s/cluster-name" --query Parameter.Value --output text)
+          aws eks update-kubeconfig --region us-east-1 --name "$CLUSTER_NAME" >/dev/null
+
+          kubectl create secret docker-registry ghcr-pull-secret \
+            --docker-server=ghcr.io \
+            --docker-username="$GHCR_USERNAME" \
+            --docker-password="$GHCR_PAT" \
+            -n oficina --dry-run=client -o yaml | kubectl apply -f - >/dev/null
+          echo "ghcr-pull-secret atualizado no namespace oficina"
+
+          ./scripts/deploy.sh homolog
+
+      - name: Smoke check
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
+          AWS_DEFAULT_REGION: us-east-1
+        run: |
+          set -euo pipefail
+          # O kubeconfig gerado no passo anterior permanece no runner.
+          READY=$(kubectl get deployment oficina-execucao-service -n oficina -o jsonpath='{.status.readyReplicas}')
+          DEPLOYED_IMAGE=$(kubectl get deployment oficina-execucao-service -n oficina -o jsonpath='{.spec.template.spec.containers[0].image}')
+          echo "Imagem implantada: $DEPLOYED_IMAGE"
+          echo "Réplicas prontas: ${READY:-0}"
+          if [ "${READY:-0}" -lt 1 ]; then
+            echo "Smoke check falhou: nenhuma réplica pronta" >&2
+            exit 1
+          fi
