@@ -52,6 +52,12 @@ Depois de subir o container:
 - Health check (readiness, confere conexão com o DynamoDB): `GET http://localhost:5000/health/ready`
 - Documentação interativa (Scalar UI): `http://localhost:5000/scalar/v1`
 
+### Demos da Saga
+
+Dois scripts reproduzem a Saga da OS na sua máquina (só Docker e curl): o caminho feliz até a execução finalizada e a compensação com cancelamento idempotente. API, SNS, SQS e DynamoDB são reais (LocalStack); OS Service e Billing são simulados.
+
+Veja o passo a passo em [demo/README.md](demo/README.md).
+
 ## Endpoints da API
 
 Além de `/health/live` e `/health/ready`, o serviço expõe:
