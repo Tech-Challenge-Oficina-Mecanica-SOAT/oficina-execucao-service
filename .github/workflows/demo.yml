@@ -1,0 +1,43 @@
+name: Demo da saga
+
+# Execução manual: sobe o ambiente de demo (LocalStack + Wiremock + API)
+# e roda os cenários de caminho feliz e rollback. Não bloqueia PRs.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: demo-saga-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  demo:
+    name: Demo (caminho feliz e rollback)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Subir ambiente de demo
+        run: docker compose -f demo/docker-compose.demo.yml up -d --build
+
+      - name: Provisionar recursos (tabelas, tópicos e filas)
+        run: bash demo/demo-setup.sh
+
+      - name: Demo do caminho feliz
+        run: bash demo/demo-happy-path.sh
+
+      - name: Demo do rollback
+        run: bash demo/demo-rollback.sh
+
+      - name: Logs da API
+        if: always()
+        run: docker compose -f demo/docker-compose.demo.yml logs api
+
+      - name: Derrubar ambiente
+        if: always()
+        run: docker compose -f demo/docker-compose.demo.yml down -v
