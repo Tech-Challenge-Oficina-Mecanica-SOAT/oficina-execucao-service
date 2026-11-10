@@ -133,17 +133,24 @@ esperar_evento() {
       --max-number-of-messages 10 --wait-time-seconds 2 \
       --query 'Messages[].[ReceiptHandle,Body]' --output text 2>/dev/null | tr -d '\r')" || linhas=""
     if [ -n "$linhas" ] && [ "$linhas" != "None" ]; then
-      while IFS=$'\t' read -r handle corpo; do
+      # fd 3: o docker exec -T dentro do loop consumiria o stdin e perderia as demais linhas
+      while IFS=$'\t' read -r -u 3 handle corpo; do
         [ -n "$handle" ] || continue
-        if [[ "$corpo" =~ $re_tipo ]] && [[ "$corpo" =~ $re_os ]]; then
-          aws_local sqs delete-message --queue-url "$VERIF_QUEUE_URL" --receipt-handle "$handle" >/dev/null
-          printf '%s\n' "$corpo"
-          return 0
+        if [[ "$corpo" =~ $re_os ]]; then
+          if [[ "$corpo" =~ $re_tipo ]]; then
+            aws_local sqs delete-message --queue-url "$VERIF_QUEUE_URL" --receipt-handle "$handle" >/dev/null
+            printf '%s\n' "$corpo"
+            return 0
+          fi
+          # mesma OS, outro tipo de evento: devolve para uma espera futura
+          aws_local sqs change-message-visibility --queue-url "$VERIF_QUEUE_URL" \
+            --receipt-handle "$handle" --visibility-timeout 0 >/dev/null 2>&1 || true
+        else
+          # outra OS / execucao anterior: lixo, descarta para nao travar a fila
+          aws_local sqs delete-message --queue-url "$VERIF_QUEUE_URL" \
+            --receipt-handle "$handle" >/dev/null 2>&1 || true
         fi
-        # nao e nossa: devolve a fila imediatamente
-        aws_local sqs change-message-visibility --queue-url "$VERIF_QUEUE_URL" \
-          --receipt-handle "$handle" --visibility-timeout 0 >/dev/null 2>&1 || true
-      done <<< "$linhas"
+      done 3<<< "$linhas"
     fi
     sleep 1
   done

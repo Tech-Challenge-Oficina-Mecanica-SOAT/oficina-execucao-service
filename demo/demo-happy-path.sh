@@ -65,7 +65,7 @@ ok "execucao.finalizada recebido na fila de verificacao"
 step "Resumo: historico de transicoes"
 historico="$(api GET "/execucao/$OS_ID/historico")" || fail "Falha ao consultar historico"
 info "$historico"
-novos="$(printf '%s' "$historico" | grep -o '"statusNovo"[[:space:]]*:[[:space:]]*"[^"]*"' | sed 's/.*:[[:space:]]*"\(.*\)"/\1/')"
+novos="$(printf '%s' "$historico" | { grep -o '"statusNovo"[[:space:]]*:[[:space:]]*"[^"]*"' || true; } | sed 's/.*:[[:space:]]*"\(.*\)"/\1/')"
 [ -n "$novos" ] || fail "Historico vazio"
 cadeia=""
 while IFS= read -r s; do

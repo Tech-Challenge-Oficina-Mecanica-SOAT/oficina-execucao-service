@@ -66,7 +66,7 @@ sleep 3
 
 step "Idempotencia: exatamente 1 transicao para Cancelado"
 historico="$(api GET "/execucao/$OS_ID/historico")" || fail "Falha ao consultar historico"
-total="$(printf '%s' "$historico" | grep -o '"statusNovo"[[:space:]]*:[[:space:]]*"Cancelado"' | wc -l | tr -d '[:space:]')"
+total="$(printf '%s' "$historico" | { grep -o '"statusNovo"[[:space:]]*:[[:space:]]*"Cancelado"' || true; } | wc -l | tr -d '[:space:]')"
 [ "$total" = "1" ] || fail "Esperada 1 transicao para Cancelado, encontradas $total"
 ok "Idempotência: 3 entregas, 1 transição"
 
@@ -78,7 +78,7 @@ ok "OS ausente da fila"
 
 step "Resumo: historico de transicoes"
 info "$historico"
-novos="$(printf '%s' "$historico" | grep -o '"statusNovo"[[:space:]]*:[[:space:]]*"[^"]*"' | sed 's/.*:[[:space:]]*"\(.*\)"/\1/')"
+novos="$(printf '%s' "$historico" | { grep -o '"statusNovo"[[:space:]]*:[[:space:]]*"[^"]*"' || true; } | sed 's/.*:[[:space:]]*"\(.*\)"/\1/')"
 [ -n "$novos" ] || fail "Historico vazio"
 cadeia=""
 while IFS= read -r s; do
