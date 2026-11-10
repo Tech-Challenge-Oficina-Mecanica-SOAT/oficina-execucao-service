@@ -54,9 +54,16 @@ Depois de subir o container:
 
 ### Demos da Saga
 
-Dois scripts reproduzem a Saga da OS na sua máquina (só Docker e curl): o caminho feliz até a execução finalizada e a compensação com cancelamento idempotente. API, SNS, SQS e DynamoDB são reais (LocalStack); OS Service e Billing são simulados.
+Dois scripts reproduzem a Saga da OS: o caminho feliz até a execução finalizada e a compensação com cancelamento idempotente. Rodam em dois alvos: `local` (padrão, só Docker e curl, com LocalStack) e `eks` (`TARGET=eks`, contra o Execução real no cluster do AWS Academy, com `aws` e `kubectl`). Nos dois, API, SNS, SQS e DynamoDB são reais; OS Service e Billing são simulados.
 
-Veja o passo a passo em [demo/README.md](demo/README.md).
+Por que o alvo `eks` roda assim:
+
+- Só o Execução está no cluster do AWS Academy. Cadastros, OS e Billing não estão deployados e não caberiam (um único node `t3.small`), então os eventos de entrada são injetados direto na fila do Execução.
+- O Academy não permite IAM nem IRSA: o pod usa as credenciais temporárias da sessão do laboratório (cerca de 4 horas), passadas por um secret do Kubernetes.
+- A API só tem `ClusterIP`: o acesso é por `kubectl port-forward`.
+- Os eventos de saída são provados por uma fila temporária assinada nos 3 tópicos reais, removida ao final.
+
+Veja o passo a passo e a solução de problemas em [demo/README.md](demo/README.md) e o deploy no cluster em [docs/deploy.md](docs/deploy.md).
 
 ## Endpoints da API
 
