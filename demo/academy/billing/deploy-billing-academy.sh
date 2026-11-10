@@ -21,8 +21,29 @@ if [ -n "$NR" ]; then
   kubectl create secret generic newrelic-license -n $NS --from-literal=license-key="$NR" --dry-run=client -o yaml | kubectl apply -f - >/dev/null
   echo "Secret newrelic-license aplicado."
 fi
-cd "$(dirname "${BASH_SOURCE[0]}")"
-kubectl apply -k .
+
+# Localiza o clone do oficina-billing-service: BILLING_REPO (se informado) ou a primeira pasta
+# "oficina-billing-service" encontrada subindo a árvore a partir deste script. Isso funciona também
+# quando este repositório está dentro de um worktree aninhado (.claude/worktrees/...).
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ -z "${BILLING_REPO:-}" ]; then
+  d="$SCRIPT_DIR"
+  while [ "$d" != "/" ] && [ "$d" != "." ]; do
+    if [ -d "$d/oficina-billing-service/k8s/base" ]; then BILLING_REPO="$d/oficina-billing-service"; break; fi
+    d="$(dirname "$d")"
+  done
+fi
+[ -d "${BILLING_REPO:-}/k8s/base" ] || { echo "Clone do oficina-billing-service não encontrado. Informe BILLING_REPO=/caminho/oficina-billing-service" >&2; exit 1; }
+echo "Usando o Billing em: $BILLING_REPO"
+
+# Overlay temporário ao lado do clone do Billing (kustomize só aceita bases por caminho relativo)
+OVERLAY_TMP="$(dirname "$BILLING_REPO")/.billing-academy-overlay.$$"
+mkdir -p "$OVERLAY_TMP"
+trap 'rm -rf "$OVERLAY_TMP"' EXIT
+cp "$SCRIPT_DIR/kustomization.yaml" "$SCRIPT_DIR/cadastros-proxy.yaml" "$OVERLAY_TMP/"
+sed -i "s#^  - \.\./\.\./\.\./\.\./oficina-billing-service/k8s/base#  - ../$(basename "$BILLING_REPO")/k8s/base#" "$OVERLAY_TMP/kustomization.yaml"
+grep -q "k8s/base" "$OVERLAY_TMP/kustomization.yaml" || { echo "Falha ao montar o overlay temporário." >&2; exit 1; }
+(cd "$OVERLAY_TMP" && kubectl apply -k .)
 kubectl rollout restart deployment/oficina-billing-service -n $NS
 kubectl rollout status deployment/cadastros-proxy -n $NS --timeout=3m
 kubectl rollout status deployment/oficina-billing-service -n $NS --timeout=5m
