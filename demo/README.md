@@ -3,7 +3,7 @@
 Resumo: dois scripts mostram o Execução Service participando da Saga de uma ordem de serviço, de ponta a ponta, na sua máquina. A API do Execução, o SNS, o SQS e o DynamoDB (no LocalStack) são reais. O OS Service e o Billing Service são simulados (Wiremock e eventos publicados pelo próprio script).
 
 - `demo/demo-happy-path.sh`: caminho feliz, da OS criada até a execução finalizada.
-- `demo/demo-rollback.sh`: compensação, o orçamento recusado cancela a OS, e o mesmo `os.cancelada` entregue 3 vezes gera uma única transição (idempotência).
+- `demo/demo-rollback.sh`: compensação: após o orçamento recusado, o OS Service cancela a OS (simulado) e o mesmo `os.cancelada` entregue 3 vezes gera uma única transição (idempotência).
 
 ## Fluxo da Saga
 
@@ -134,4 +134,4 @@ Se o ambiente ficou inconsistente, recomece do zero com `down -v` (passo 5) e re
 
 ## Demo do OS Service
 
-Para ver o lado do OS Service, consulte o repositório [oficina-mecanica](https://github.com/Tech-Challenge-Oficina-Mecanica-SOAT/oficina-mecanica). Nesta demo o OS é apenas simulado.
+O OS Service tem demos próprias em [oficina-os-service](https://github.com/Tech-Challenge-Oficina-Mecanica-SOAT/oficina-os-service), nos scripts `scripts/demo-happy-path.sh` e `scripts/demo-rollback.sh`. Nesta demo o OS é apenas simulado.
