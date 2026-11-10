@@ -4,6 +4,7 @@ Resumo: dois scripts mostram o Execução Service participando da Saga de uma or
 
 - `demo/demo-happy-path.sh`: caminho feliz, da OS criada até a execução finalizada.
 - `demo/demo-rollback.sh`: compensação: após o orçamento recusado, o OS Service cancela a OS (simulado) e o mesmo `os.cancelada` entregue 3 vezes gera uma única transição (idempotência).
+- `demo/saga-completa.sh`: o fluxo completo pelos 4 serviços reais (Cadastros, OS, Execução e Billing) no cluster, sem nada simulado: `bash demo/saga-completa.sh happy` (OS termina `Concluida`) ou `rollback` (orçamento recusado, OS `Cancelada`). Exige os 4 serviços deployados; o passo a passo está em [docs/fluxo-completo.md](../docs/fluxo-completo.md).
 
 ## Fluxo da Saga
 
@@ -60,7 +61,7 @@ No cluster do AWS Academy existe apenas o Execução Service. O motivo de os tes
 
 A API key interna é lida do secret `oficina-execucao-secrets` do cluster e nunca é impressa. Os ids de OS e de orçamento são gerados a cada execução, então rodar de novo é seguro.
 
-Mais detalhes sobre o deploy em [docs/deploy.md](../docs/deploy.md).
+Mais detalhes sobre o deploy em [docs/deploy.md](../docs/deploy.md). Para rodar a Saga com os 4 serviços reais juntos no cluster, veja [docs/fluxo-completo.md](../docs/fluxo-completo.md).
 
 ## Pré-requisitos
 
