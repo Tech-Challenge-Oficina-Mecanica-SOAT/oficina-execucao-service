@@ -4,12 +4,12 @@
 # internet-facing, e nenhuma escrita no SSM. Mesmos manifests, mesmo Secret.
 # As credenciais da sessão (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_SESSION_TOKEN) são sempre
 # injetadas no Secret (o Academy não tem IRSA). NEW_RELIC_LICENSE_KEY é opcional e nunca é impressa.
-# Uso: [OS_REPO=<caminho do clone do oficina-os-service>] [IMAGE=<imagem>] bash demo/academy/os/deploy-os-academy.sh [homolog]
-# Sem OS_REPO, usa ../oficina-os-service (clone ao lado deste repositório).
+# Requer envsubst. Uso: [OS_REPO=<clone do oficina-os-service>] [IMAGE=<imagem>] bash demo/academy/os/deploy-os-academy.sh [homolog]
+# Sem OS_REPO, procura a pasta irmã oficina-os-service subindo a árvore a partir deste script.
 set -euo pipefail
-RAIZ="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-OS_REPO="${OS_REPO:-$RAIZ/../oficina-os-service}"
-[ -d "$OS_REPO/k8s" ] || { echo "Clone do oficina-os-service não encontrado em '$OS_REPO'. Defina OS_REPO." >&2; exit 1; }
+export MSYS_NO_PATHCONV=1
+source "$(dirname "${BASH_SOURCE[0]}")/../_localizar-clone.sh"
+localizar_clone oficina-os-service OS_REPO k8s || { echo "Clone do oficina-os-service não encontrado. Defina OS_REPO=/caminho/oficina-os-service." >&2; exit 1; }
 ENVIRONMENT=${1:-homolog}
 NS=oficina
 IMAGE=${IMAGE:-ghcr.io/tech-challenge-oficina-mecanica-soat/oficina-os-service:latest}

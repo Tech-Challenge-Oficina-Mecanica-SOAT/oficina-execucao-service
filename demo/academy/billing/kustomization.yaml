@@ -2,7 +2,9 @@
 # Diferenças em relação a k8s/overlays/homolog do Billing: namespace oficina, credenciais da sessão por
 # variável de ambiente (sem IRSA), 1 réplica (o Mercado Pago fake guarda as cobranças em memória), sem
 # Ingress ALB, Mercado Pago fake, e o Cadastros acessado por um proxy que corrige o campo nome -> descricao.
-# Layout esperado: este repositório e o oficina-billing-service são pastas irmãs (mesmo diretório pai).
+# O deploy-billing-academy.sh copia este overlay para uma pasta temporária ao lado do clone do Billing e ajusta o
+# caminho de resources. A imagem fica fixada em newTag (tag = sha de 12 caracteres do commit; não há latest):
+# ao remover o proxy depois do PR de correção do Billing, troque também o newTag pelo sha da imagem nova.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 namespace: oficina

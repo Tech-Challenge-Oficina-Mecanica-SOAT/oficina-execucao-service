@@ -10,8 +10,9 @@
 #   NEW_RELIC_LICENSE_KEY                                         (opcional, para o APM reportar)
 # Os valores são lidos apenas do ambiente: nunca são impressos nem gravados em arquivo.
 #
-# Layout esperado: os clones oficina-cadastros-service, oficina-os-service e oficina-infra-k8s são pastas
-# irmãs deste repositório. Para outro local, defina CADASTROS_REPO, OS_REPO ou INFRA_K8S_REPO.
+# Os clones oficina-cadastros-service, oficina-os-service e oficina-infra-k8s são localizados como pastas
+# irmãs, subindo a árvore a partir deste script (vale também em worktree aninhado). Para outro local,
+# defina CADASTROS_REPO, OS_REPO, BILLING_REPO ou INFRA_K8S_REPO.
 # Uso: bash demo/academy/renovar-credenciais.sh [homolog]
 set -euo pipefail
 export AWS_DEFAULT_REGION="${AWS_DEFAULT_REGION:-us-east-1}" MSYS_NO_PATHCONV=1
@@ -19,9 +20,10 @@ export AWS_DEFAULT_REGION="${AWS_DEFAULT_REGION:-us-east-1}" MSYS_NO_PATHCONV=1
 AQUI="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 RAIZ="$(cd "$AQUI/../.." && pwd)"
 ENV="${1:-homolog}"
-CADASTROS_REPO="${CADASTROS_REPO:-$RAIZ/../oficina-cadastros-service}"
-OS_REPO="${OS_REPO:-$RAIZ/../oficina-os-service}"
-INFRA_K8S_REPO="${INFRA_K8S_REPO:-$RAIZ/../oficina-infra-k8s}"
+source "$AQUI/_localizar-clone.sh"
+localizar_clone oficina-cadastros-service CADASTROS_REPO scripts || { echo "Clone do oficina-cadastros-service não encontrado (defina CADASTROS_REPO)." >&2; exit 1; }
+localizar_clone oficina-os-service OS_REPO k8s || { echo "Clone do oficina-os-service não encontrado (defina OS_REPO)." >&2; exit 1; }
+localizar_clone oficina-infra-k8s INFRA_K8S_REPO scripts || { echo "Clone do oficina-infra-k8s não encontrado (defina INFRA_K8S_REPO)." >&2; exit 1; }
 export OS_REPO
 
 : "${AWS_ACCESS_KEY_ID:?Exporte AWS_ACCESS_KEY_ID (sessão nova do Academy)}"
@@ -30,9 +32,6 @@ export OS_REPO
 : "${GHCR_USERNAME:?Exporte GHCR_USERNAME}"
 : "${GHCR_PAT:?Exporte GHCR_PAT}"
 
-for d in "$CADASTROS_REPO" "$OS_REPO" "$INFRA_K8S_REPO"; do
-  [ -d "$d" ] || { echo "Clone não encontrado: $d (defina CADASTROS_REPO, OS_REPO ou INFRA_K8S_REPO)." >&2; exit 1; }
-done
 aws sts get-caller-identity >/dev/null 2>&1 || { echo "Sessão AWS inválida ou expirada." >&2; exit 1; }
 
 CLUSTER_NAME=$(aws ssm get-parameter --name "/oficina/$ENV/k8s/cluster-name" --query Parameter.Value --output text)
@@ -44,7 +43,8 @@ etapa "ghcr-pull-secret"
 bash "$INFRA_K8S_REPO/scripts/create-ghcr-pull-secret.sh" "$ENV" >/dev/null
 
 etapa "Cadastros"
-# O deploy.sh do Cadastros não reinicia o pod: sem o restart, ele manteria as credenciais antigas.
+# O deploy.sh do Cadastros não reinicia o pod. O Cadastros não guarda credenciais AWS no secret (usa a role
+# do node), mas o restart é inofensivo e relê a chave do New Relic.
 (cd "$CADASTROS_REPO" && bash scripts/deploy.sh "$ENV")
 kubectl rollout restart deployment/oficina-cadastros-service -n oficina
 kubectl rollout status deployment/oficina-cadastros-service -n oficina --timeout=5m
@@ -53,14 +53,16 @@ etapa "OS Service"
 bash "$AQUI/os/deploy-os-academy.sh" "$ENV"
 
 etapa "Billing"
-bash "$AQUI/billing/deploy-billing-academy.sh"
+bash "$AQUI/billing/deploy-billing-academy.sh" "$ENV"
 
 etapa "Execução"
 (cd "$RAIZ" && bash scripts/deploy.sh "$ENV")
 
-# Mantém os HPAs do OS e do Cadastros em 1 réplica (picos de CPU na partida esgotam os 2 nodes)
-for hpa in oficina-os-service oficina-cadastros-service; do
-  kubectl patch hpa "$hpa" -n oficina --type merge -p '{"spec":{"minReplicas":1,"maxReplicas":1}}' >/dev/null || true
+
+# Mantém os HPAs em 1 réplica (picos de CPU na partida fazem o HPA escalar e esgotam os 2 nodes)
+for hpa in oficina-os-service oficina-cadastros-service oficina-execucao-service; do
+  kubectl patch hpa "$hpa" -n oficina --type merge -p '{"spec":{"minReplicas":1,"maxReplicas":1}}' >/dev/null \
+    || echo "AVISO: não consegui fixar o HPA $hpa em 1 réplica." >&2
 done
 
 etapa "Estado final"

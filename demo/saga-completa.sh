@@ -48,7 +48,7 @@ abrir oficina-cadastros-service "$P_CAD" "$URL_CAD"; ok "Cadastros  $URL_CAD"
 abrir oficina-os-service        "$P_OS"  "$URL_OS";  ok "OS         $URL_OS"
 abrir oficina-execucao-service  "$P_EXE" "$URL_EXE"; ok "Execução   $URL_EXE"
 abrir oficina-billing-service   "$P_BIL" "$URL_BIL"; ok "Billing    $URL_BIL"
-API_KEY=$(kubectl get secret oficina-execucao-secrets -n "$NS" -o jsonpath='{.data.InternalApi__ApiKey}' | base64 -d)
+API_KEY=$(kubectl get secret oficina-execucao-secrets -n "$NS" -o jsonpath='{.data.InternalApi__ApiKey}' 2>/dev/null | base64 -d || true)
 [ -n "$API_KEY" ] || fail "Não consegui ler a API key da Execução no cluster."
 
 # req <METODO> <url> [corpo] [header-extra]: imprime o corpo; define HTTP_CODE (chame sem $(...) para preservar)
@@ -68,7 +68,7 @@ req() {
 }
 exigir_2xx() { case "$HTTP_CODE" in 2??) ;; *) fail "$1 falhou: HTTP $HTTP_CODE ${BODY:0:300}";; esac; }
 
-# esperar_valor <rotulo> <esperado> <comando que imprime o valor>: poll de 1 s por até 60 s
+# esperar_valor <rotulo> <esperado> <comando que imprime o valor>: poll de 1 s por até 90 s
 esperar_valor() {
   local rot="$1" esp="$2"; shift 2; local v="" i
   for i in $(seq 1 90); do v="$("$@" 2>/dev/null || true)"; [ "$v" = "$esp" ] && { ok "$rot: $esp"; return 0; }; sleep 1; done
