@@ -7,6 +7,16 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib/demo-lib.sh"
 
 TABELA="oficina-execucao-demo"
 
+step "Aguardando o LocalStack ficar pronto"
+fim=$((SECONDS + 60))
+pronto=false
+while [ "$SECONDS" -lt "$fim" ]; do
+  if aws_local dynamodb list-tables >/dev/null 2>&1; then pronto=true; break; fi
+  sleep 2
+done
+[ "$pronto" = true ] || fail "LocalStack nao respondeu em 60 s. Veja: docker compose -f demo/docker-compose.demo.yml logs localstack"
+ok "LocalStack pronto"
+
 step "Criando tabela DynamoDB $TABELA"
 if aws_local dynamodb describe-table --table-name "$TABELA" >/dev/null 2>&1; then
   info "Tabela ja existe"

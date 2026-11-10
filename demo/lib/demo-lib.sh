@@ -9,7 +9,7 @@ DEMO_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$DEMO_LIB_DIR/../.." && pwd)"
 COMPOSE_FILE="demo/docker-compose.demo.yml"
 
-export API_URL="${API_URL:-http://localhost:5000}"
+export API_URL="${API_URL:-http://localhost:${API_PORT:-5000}}"
 export WIREMOCK_URL="http://localhost:8080"
 export API_KEY="execucao-internal-api-key-local-dev"
 export AWS_DEFAULT_REGION="us-east-1"
@@ -100,7 +100,8 @@ api() {
 
 # json_field <campo>: le JSON do stdin e imprime o valor string do campo
 json_field() {
-  sed -n 's/.*"'"$1"'"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1
+  # grep -o separa as ocorrencias; head pega a PRIMEIRA (o sed guloso pegaria a ultima)
+  grep -o '"'"$1"'"[[:space:]]*:[[:space:]]*"[^"]*"' | head -n 1 | sed 's/^[^:]*:[[:space:]]*"\(.*\)"$/\1/' || true
 }
 
 exec_status() {
