@@ -16,6 +16,8 @@ Verificação: `kubectl port-forward svc/oficina-execucao-service 5002:80 -n ofi
 
 O node do EKS usa a role `LabEksNodeRole`, sem permissão para DynamoDB/SQS/SNS nesta conta AWS Academy — e não é possível anexar política nova nela nem na `LabRole` (`AccessDenied` em `iam:PutRolePolicy`, testado). Por isso `scripts/populate-secret.sh` repassa as credenciais temporárias da sessão atual para o pod via variáveis de ambiente (`AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`/`AWS_SESSION_TOKEN`), que o SDK da AWS para .NET usa automaticamente. Essas credenciais expiram em ~4h (mesmo prazo de qualquer sessão AWS Academy) — rode `./scripts/deploy.sh homolog` de novo (não só `populate-secret.sh`) se for retomar a demonstração depois disso — o rollout restart é o que faz o pod pegar as credenciais novas.
 
+Observabilidade (nomes de transação, atributos, consultas NRQL): ver `docs/observabilidade.md`.
+
 Derrubar: `kubectl delete deployment,service,hpa oficina-execucao-service -n oficina`.
 
 ## Deploy automatizado (GitHub Actions)

@@ -51,4 +51,37 @@ public class SnsEventPublisherTests
 
         await act.Should().ThrowAsync<InvalidOperationException>();
     }
+
+    private static async Task<string> PublicarECapturarCorrelationAsync(OficinaExecucao.Application.Observabilidade.CorrelacaoAtual? atual)
+    {
+        var client = new Mock<IAmazonSimpleNotificationService>();
+        PublishRequest? capturado = null;
+        client
+            .Setup(c => c.PublishAsync(It.IsAny<PublishRequest>(), It.IsAny<CancellationToken>()))
+            .Callback<PublishRequest, CancellationToken>((req, _) => capturado = req)
+            .ReturnsAsync(new PublishResponse());
+        var options = Options.Create(new SnsOptions { TopicArns = new Dictionary<string, string> { ["x"] = "arn:x" } });
+
+        await new SnsEventPublisher(client.Object, options, atual).PublicarAsync("x", new { }, CancellationToken.None);
+
+        using var envelope = JsonDocument.Parse(capturado!.Message);
+        return envelope.RootElement.GetProperty("correlationId").GetString()!;
+    }
+
+    [Fact]
+    public async Task PublicarAsync_SemActivityComCorrelacaoDeEntrada_UsaACorrelacaoDeEntrada()
+    {
+        System.Diagnostics.Activity.Current = null;
+        var atual = new OficinaExecucao.Application.Observabilidade.CorrelacaoAtual { CorrelationId = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01" };
+
+        (await PublicarECapturarCorrelationAsync(atual)).Should().Be(atual.CorrelationId);
+    }
+
+    [Fact]
+    public async Task PublicarAsync_SemActivityNemCorrelacaoDeEntrada_GeraGuid()
+    {
+        System.Diagnostics.Activity.Current = null;
+
+        Guid.TryParse(await PublicarECapturarCorrelationAsync(new OficinaExecucao.Application.Observabilidade.CorrelacaoAtual()), out _).Should().BeTrue();
+    }
 }

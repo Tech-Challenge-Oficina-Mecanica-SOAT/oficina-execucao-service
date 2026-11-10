@@ -4,10 +4,14 @@ using Amazon.SimpleNotificationService;
 using Amazon.SimpleNotificationService.Model;
 using Microsoft.Extensions.Options;
 using OficinaExecucao.Application;
+using OficinaExecucao.Application.Observabilidade;
 
 namespace OficinaExecucao.Infrastructure.Messaging;
 
-public sealed class SnsEventPublisher(IAmazonSimpleNotificationService client, IOptions<SnsOptions> options) : IEventPublisher
+public sealed class SnsEventPublisher(
+    IAmazonSimpleNotificationService client,
+    IOptions<SnsOptions> options,
+    CorrelacaoAtual? correlacaoAtual = null) : IEventPublisher
 {
     private static readonly JsonSerializerOptions EnvelopeJsonOptions = new()
     {
@@ -25,7 +29,7 @@ public sealed class SnsEventPublisher(IAmazonSimpleNotificationService client, I
             eventType,
             eventVersion = "1.0",
             occurredAt = DateTimeOffset.UtcNow.ToString("O"),
-            correlationId = Activity.Current?.Id ?? Guid.NewGuid().ToString(),
+            correlationId = Activity.Current?.Id ?? correlacaoAtual?.CorrelationId ?? Guid.NewGuid().ToString(),
             producer = "execucao-service",
             data
         };

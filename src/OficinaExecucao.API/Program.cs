@@ -12,11 +12,14 @@ using OficinaExecucao.API.Configuration;
 using OficinaExecucao.API.Endpoints;
 using OficinaExecucao.Application;
 using OficinaExecucao.Application.Configuration;
+using OficinaExecucao.Application.Observabilidade;
 using OficinaExecucao.Application.UseCases;
 using OficinaExecucao.Domain.Exceptions;
 using OficinaExecucao.Infrastructure.Auth;
 using OficinaExecucao.Infrastructure.DynamoDb;
 using OficinaExecucao.Infrastructure.Messaging;
+using OficinaExecucao.Infrastructure.Observabilidade;
+using OficinaExecucao.API.Middleware;
 
 Log.Logger = new LoggerConfiguration()
     .WriteTo.Console(new CompactJsonFormatter())
@@ -27,6 +30,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Host.UseSerilog((context, services, configuration) => configuration
     .ReadFrom.Configuration(context.Configuration)
     .ReadFrom.Services(services)
+    .Enrich.FromLogContext()
     .WriteTo.Console(new CompactJsonFormatter()));
 
 builder.Services.AddOpenApi();
@@ -53,7 +57,14 @@ builder.Services.AddScoped<FinalizarUseCase>();
 builder.Services.AddScoped<ProcessarOsCriadaUseCase>();
 builder.Services.AddScoped<ProcessarOsCanceladaUseCase>();
 builder.Services.AddScoped<ProcessarOrcamentoAprovadoUseCase>();
-builder.Services.AddScoped<IMensagemDispatcher, MensagemDispatcher>();
+builder.Services.AddSingleton<IObservabilidade, NewRelicObservabilidade>();
+builder.Services.AddScoped<CorrelacaoAtual>();
+builder.Services.AddScoped<MensagemDispatcher>();
+builder.Services.AddScoped<IMensagemDispatcher>(sp => new MensagemDispatcherObservavel(
+    sp.GetRequiredService<MensagemDispatcher>(),
+    sp.GetRequiredService<IObservabilidade>(),
+    sp.GetRequiredService<CorrelacaoAtual>(),
+    sp.GetRequiredService<ILogger<MensagemDispatcherObservavel>>()));
 
 builder.Services.Configure<SqsOptions>(builder.Configuration.GetSection("Sqs"));
 builder.Services.AddSingleton<Amazon.SQS.IAmazonSQS>(
@@ -91,6 +102,10 @@ builder.Services.AddAuthorization(options =>
 });
 
 var app = builder.Build();
+
+// UseRouting explícito: o ObservabilidadeMiddleware precisa do endpoint casado (template da rota).
+app.UseRouting();
+app.UseMiddleware<ObservabilidadeMiddleware>();
 
 app.UseSerilogRequestLogging();
 
