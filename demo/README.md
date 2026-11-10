@@ -7,6 +7,8 @@ Resumo: dois scripts mostram o Execução Service participando da Saga de uma or
 
 ## Fluxo da Saga
 
+O diagrama abaixo é a visão do alvo `local`. No alvo `eks`, os serviços simulados são o próprio script: os eventos de entrada são injetados direto na fila SQS real do Execução e a verificação dos eventos de saída usa uma fila temporária.
+
 ```
  [SIMULADO]                 [REAL]                              [SIMULADO]
  OS Service                 Execução Service                    Billing Service
@@ -101,6 +103,8 @@ O que o script faz, nesta ordem:
 7. Executa a Saga: os eventos de entrada são injetados na fila do Execução e os de saída são conferidos na fila temporária.
 8. Ao terminar, falhar ou receber Ctrl+C, remove assinaturas, fila temporária e port-forward.
 
+Não rode duas demos `eks` em paralelo na mesma conta: a varredura do início de cada execução remove a fila temporária de verificação da outra.
+
 Para o New Relic mostrar dados, rode os scripts pouco antes de abrir o APM `oficina-execucao-service`: o tráfego gerado pela demo é o que popula as telas.
 
 ## Como rodar no alvo `local`
@@ -146,6 +150,7 @@ Não rode duas demos em paralelo contra o mesmo ambiente, pois cada script desca
 | Serviço | Porta | Observação |
 |---|---|---|
 | API do Execução | 5000 | Configurável com `API_PORT` |
+| Port-forward do Execução (alvo `eks`) | 5002 | Fixa; o script abre e fecha sozinho |
 | Wiremock | 8080 | Fixa |
 | LocalStack | 4566 | Fixa |
 
@@ -199,7 +204,7 @@ netstat -ano | grep ':5002'
 taskkill //F //PID <pid>
 ```
 
-As barras são duplas no Git Bash. Se nenhum outro `kubectl` estiver em uso, a opção direta é `taskkill //F //IM kubectl.exe`. No Linux ou macOS: `lsof -ti :5002 | xargs kill`.
+As barras são duplas no Git Bash. Se nenhum outro `kubectl` estiver em uso, a opção direta é `taskkill //F //IM kubectl.exe`. No Linux: `lsof -ti :5002 | xargs kill`.
 
 **Pod com `AccessDenied` no SQS ou no DynamoDB e `0/1`, logo depois de renovar as credenciais.** Ao renovar o laboratório, o AWS Academy cancela as credenciais da sessão anterior (política `voc-cancel-cred`), e o pod, que ainda usa as antigas pelo secret, passa a falhar e fica `0/1`. Com as credenciais novas exportadas, refaça o deploy (veja [docs/deploy.md](../docs/deploy.md)):
 

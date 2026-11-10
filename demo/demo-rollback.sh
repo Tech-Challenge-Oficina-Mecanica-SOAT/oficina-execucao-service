@@ -4,7 +4,7 @@ set -euo pipefail
 # Demo da compensacao da Saga (rollback): orcamento recusado cancela a OS.
 # Prova tambem a idempotencia: o mesmo os.cancelada entregue 3 vezes gera 1 transicao.
 # OS e Billing sao simulados pelo script (Wiremock no alvo local, ids gerados pelo script no alvo eks).
-# Pre-requisito: ambiente no ar e provisionado (demo/demo-setup.sh).
+# Pre-requisito (alvo local): ambiente no ar e provisionado (demo/demo-setup.sh).
 DEMO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$DEMO_DIR/lib/demo-lib.sh"
 
@@ -18,9 +18,9 @@ fila_contem() {
 step "Abrir OS ($SIM_OS_ROTULO)"
 abrir_os_simulada
 
-step "OS Service publica os.criada"
+step "OS Service publica os.criada${PUB_SUFIXO}"
 publicar_evento os-criada os.criada "{\"osId\":\"$OS_ID\"}"
-ok "Evento os.criada publicado"
+ok "Evento os.criada $PUB_VERBO"
 
 step "Execucao Service processa os.criada"
 expect_status "$OS_ID" AguardandoDiagnostico
@@ -42,17 +42,17 @@ ok "diagnostico.concluido recebido na fila de verificacao (consumido para nao de
 expect_status "$OS_ID" DiagnosticoConcluido
 
 step "Billing Service: o cliente recusa o orcamento"
-info "O Billing publica orcamento.recusado; o OS Service compensa publicando os.cancelada."
+info "$PUB_INFO_RECUSA"
 info "A API do Execucao nao consome orcamento.recusado: ela reage ao cancelamento da OS."
 
-step "OS Service publica os.cancelada 3 vezes com o MESMO eventId (entrega duplicada)"
+step "OS Service publica os.cancelada 3 vezes com o MESMO eventId (entrega duplicada)${PUB_SUFIXO}"
 EVENT_ID="$(gen_uuid)"
 info "eventId: $EVENT_ID"
 for i in 1 2 3; do
   publicar_evento os-cancelada os.cancelada "{\"osId\":\"$OS_ID\",\"motivo\":\"orcamento_recusado\"}" "$EVENT_ID"
-  info "Entrega $i publicada"
+  info "Entrega $i $PUB_VERBO_F"
 done
-ok "3 entregas de os.cancelada publicadas"
+ok "3 entregas de os.cancelada $PUB_VERBO_PL"
 
 step "Execucao Service compensa: status Cancelado"
 expect_status "$OS_ID" Cancelado
@@ -84,4 +84,4 @@ ESPERADO="AguardandoDiagnostico → DiagnosticoConcluido → Cancelado"
 [ "$cadeia" = "$ESPERADO" ] || fail "Cadeia de status inesperada. Esperado: $ESPERADO | Obtido: $cadeia"
 ok "$cadeia"
 
-banner_sucesso "Compensação da Saga (rollback)"
+banner_sucesso "$BANNER_ROLLBACK"

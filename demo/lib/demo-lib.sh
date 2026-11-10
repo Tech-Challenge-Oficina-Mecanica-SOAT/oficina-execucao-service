@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Funcoes compartilhadas pelos scripts de demo. Uso: source "$(dirname "$0")/lib/demo-lib.sh"
-# Pre-requisitos do host: Docker e curl (sem jq, uuidgen ou AWS CLI).
+# Pre-requisitos do host (alvo local): Docker e curl (sem jq, uuidgen ou AWS CLI).
+# O alvo eks precisa tambem de aws e kubectl.
 
 # Git Bash no Windows converte argumentos que parecem caminhos (ex.: /000000000000/fila)
 export MSYS_NO_PATHCONV=1
@@ -34,6 +35,29 @@ case "$TARGET" in
     ;;
 esac
 export SIM_OS_ROTULO SIM_BILLING_ROTULO
+
+# Textos de publicacao de eventos: no eks o proprio script injeta os eventos dos servicos simulados
+case "$TARGET" in
+  local)
+    PUB_SUFIXO=""
+    PUB_VERBO="publicado"
+    PUB_VERBO_F="publicada"
+    PUB_VERBO_PL="publicadas"
+    PUB_INFO_RECUSA="O Billing publica orcamento.recusado; o OS Service compensa publicando os.cancelada."
+    BANNER_FELIZ="Saga completa (caminho feliz)"
+    BANNER_ROLLBACK="Compensação da Saga (rollback)"
+    ;;
+  eks)
+    PUB_SUFIXO=" (injetado pelo script)"
+    PUB_VERBO="injetado"
+    PUB_VERBO_F="injetada"
+    PUB_VERBO_PL="injetadas"
+    PUB_INFO_RECUSA="Na Saga real o Billing publicaria orcamento.recusado e o OS Service compensaria com os.cancelada; aqui o script injeta o os.cancelada."
+    BANNER_FELIZ="Saga do Execução completa (caminho feliz; OS e Billing simulados)"
+    BANNER_ROLLBACK="Compensação do Execução (rollback; OS e Billing simulados)"
+    ;;
+esac
+export PUB_SUFIXO PUB_VERBO PUB_VERBO_F PUB_VERBO_PL PUB_INFO_RECUSA BANNER_FELIZ BANNER_ROLLBACK
 
 VERIF_QUEUE_URL="http://localhost:4566/000000000000/oficina-execucao-verificacao-queue"
 
@@ -257,7 +281,8 @@ limpar_eks() {
     if kill -0 "$EKS_PF_PID" >/dev/null 2>&1; then
       kill -9 "$EKS_PF_PID" >/dev/null 2>&1 || true
       if [ -n "$winpid" ] && command -v taskkill >/dev/null 2>&1; then
-        taskkill //F //PID "$winpid" >/dev/null 2>&1 || true
+        # MSYS_NO_PATHCONV=1 (topo da lib) desliga a conversao de //F para /F, entao usa barra simples
+        taskkill /F /PID "$winpid" >/dev/null 2>&1 || true
       fi
     fi
     EKS_PF_PID=""

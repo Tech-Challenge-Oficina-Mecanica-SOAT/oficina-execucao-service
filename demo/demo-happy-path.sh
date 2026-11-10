@@ -3,16 +3,16 @@ set -euo pipefail
 
 # Demo da saga completa (caminho feliz) do Execucao Service.
 # OS e Billing sao simulados pelo script (Wiremock no alvo local, ids gerados pelo script no alvo eks).
-# Pre-requisito: ambiente no ar e provisionado (demo/demo-setup.sh).
+# Pre-requisito (alvo local): ambiente no ar e provisionado (demo/demo-setup.sh).
 DEMO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$DEMO_DIR/lib/demo-lib.sh"
 
 step "Abrir OS ($SIM_OS_ROTULO)"
 abrir_os_simulada
 
-step "OS Service publica os.criada"
+step "OS Service publica os.criada${PUB_SUFIXO}"
 publicar_evento os-criada os.criada "{\"osId\":\"$OS_ID\"}"
-ok "Evento os.criada publicado"
+ok "Evento os.criada $PUB_VERBO"
 
 step "Execucao Service processa os.criada"
 expect_status "$OS_ID" AguardandoDiagnostico
@@ -33,9 +33,9 @@ ok "diagnostico.concluido recebido na fila de verificacao"
 step "Billing Service aprova o orcamento ($SIM_BILLING_ROTULO)"
 aprovar_orcamento_simulado
 
-step "Billing Service publica orcamento.aprovado"
+step "Billing Service publica orcamento.aprovado${PUB_SUFIXO}"
 publicar_evento orcamento-aprovado orcamento.aprovado "{\"osId\":\"$OS_ID\",\"orcamentoId\":\"$ORCAMENTO_ID\"}"
-ok "Evento orcamento.aprovado publicado"
+ok "Evento orcamento.aprovado $PUB_VERBO"
 
 step "Execucao Service processa orcamento.aprovado"
 expect_status "$OS_ID" AguardandoReparo
@@ -68,4 +68,4 @@ ESPERADO="AguardandoDiagnostico → DiagnosticoConcluido → AguardandoReparo �
 [ "$cadeia" = "$ESPERADO" ] || fail "Cadeia de status inesperada. Esperado: $ESPERADO | Obtido: $cadeia"
 ok "$cadeia"
 
-banner_sucesso "Saga completa (caminho feliz)"
+banner_sucesso "$BANNER_FELIZ"
