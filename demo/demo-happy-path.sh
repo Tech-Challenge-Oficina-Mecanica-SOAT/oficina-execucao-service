@@ -28,7 +28,7 @@ SERVICO_ID="$(gen_uuid)"
 api POST "/execucao/$OS_ID/diagnostico" \
   "{\"pecas\":[{\"pecaId\":\"$PECA_ID\",\"quantidade\":2}],\"servicos\":[{\"servicoId\":\"$SERVICO_ID\",\"quantidade\":1}],\"tempoEstimadoHoras\":3.5,\"observacoes\":\"Troca de pastilhas\"}" >/dev/null \
   || fail "Falha ao registrar diagnostico"
-ok "Diagnostico registrado (HTTP 204)"
+ok "Diagnostico registrado HTTP 2xx"
 
 step "Verificar diagnostico.concluido publicado de verdade"
 evento="$(esperar_evento diagnostico.concluido "$OS_ID")"
@@ -50,14 +50,14 @@ expect_status "$OS_ID" AguardandoReparo
 
 step "Iniciar reparo (API real)"
 api POST "/execucao/$OS_ID/iniciar-reparo" >/dev/null || fail "Falha ao iniciar reparo"
-ok "Reparo iniciado (HTTP 204)"
+ok "Reparo iniciado HTTP 2xx"
 evento="$(esperar_evento execucao.iniciada "$OS_ID")"
 info "$evento"
 ok "execucao.iniciada recebido na fila de verificacao"
 
 step "Finalizar execucao (API real)"
 api POST "/execucao/$OS_ID/finalizar" '{"tempoRealHoras":3}' >/dev/null || fail "Falha ao finalizar"
-ok "Execucao finalizada (HTTP 204)"
+ok "Execucao finalizada HTTP 2xx"
 evento="$(esperar_evento execucao.finalizada "$OS_ID")"
 info "$evento"
 ok "execucao.finalizada recebido na fila de verificacao"
@@ -72,7 +72,8 @@ while IFS= read -r s; do
   [ -n "$s" ] || continue
   cadeia="${cadeia:+$cadeia → }$s"
 done <<< "$novos"
+ESPERADO="AguardandoDiagnostico → DiagnosticoConcluido → AguardandoReparo → EmReparo → Finalizado"
+[ "$cadeia" = "$ESPERADO" ] || fail "Cadeia de status inesperada. Esperado: $ESPERADO | Obtido: $cadeia"
 ok "$cadeia"
-[ "${cadeia##* → }" = "Finalizado" ] || fail "Historico nao termina em Finalizado"
 
 banner_sucesso "Saga completa (caminho feliz)"

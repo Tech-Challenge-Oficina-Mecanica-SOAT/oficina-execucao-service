@@ -90,6 +90,8 @@ docker compose -f demo/docker-compose.demo.yml down -v
 
 Os scripts de demo podem ser executados várias vezes sem derrubar o ambiente. Eventos de execuções anteriores que sobrarem na fila de verificação são descartados automaticamente.
 
+Não rode duas demos em paralelo contra o mesmo ambiente, pois cada script descarta da fila de verificação os eventos de outras OSes.
+
 ### Portas usadas no host
 
 | Serviço | Porta | Observação |

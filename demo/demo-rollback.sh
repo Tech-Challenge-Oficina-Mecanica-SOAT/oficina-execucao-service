@@ -40,7 +40,7 @@ SERVICO_ID="$(gen_uuid)"
 api POST "/execucao/$OS_ID/diagnostico" \
   "{\"pecas\":[{\"pecaId\":\"$PECA_ID\",\"quantidade\":2}],\"servicos\":[{\"servicoId\":\"$SERVICO_ID\",\"quantidade\":1}],\"tempoEstimadoHoras\":3.5,\"observacoes\":\"Troca de pastilhas\"}" >/dev/null \
   || fail "Falha ao registrar diagnostico"
-ok "Diagnostico registrado (HTTP 204)"
+ok "Diagnostico registrado HTTP 2xx"
 evento="$(esperar_evento diagnostico.concluido "$OS_ID")"
 info "$evento"
 ok "diagnostico.concluido recebido na fila de verificacao (consumido para nao deixar lixo na fila)"
@@ -85,7 +85,8 @@ while IFS= read -r s; do
   [ -n "$s" ] || continue
   cadeia="${cadeia:+$cadeia → }$s"
 done <<< "$novos"
+ESPERADO="AguardandoDiagnostico → DiagnosticoConcluido → Cancelado"
+[ "$cadeia" = "$ESPERADO" ] || fail "Cadeia de status inesperada. Esperado: $ESPERADO | Obtido: $cadeia"
 ok "$cadeia"
-[ "${cadeia##* → }" = "Cancelado" ] || fail "Historico nao termina em Cancelado"
 
 banner_sucesso "Compensação da Saga (rollback)"

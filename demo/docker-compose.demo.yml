@@ -8,7 +8,7 @@ services:
       - AWS_DEFAULT_REGION=us-east-1
 
   wiremock:
-    image: wiremock/wiremock
+    image: wiremock/wiremock:3.13.2
     ports:
       - "8080:8080"
     volumes:

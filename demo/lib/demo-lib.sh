@@ -158,9 +158,13 @@ esperar_evento() {
 }
 
 verificar_ambiente() {
-  if ! docker compose -f "$COMPOSE_FILE" ps --status running --services 2>/dev/null | grep -q '^localstack$'; then
-    fail "Ambiente fora do ar. Rode: docker compose -f demo/docker-compose.demo.yml up -d --build"
-  fi
+  local rodando svc
+  rodando="$(docker compose -f "$COMPOSE_FILE" ps --status running --services 2>/dev/null || true)"
+  for svc in localstack wiremock api; do
+    if ! grep -qx "$svc" <<< "$rodando"; then
+      fail "Ambiente fora do ar (servico ausente: $svc). Rode: docker compose -f demo/docker-compose.demo.yml up -d --build"
+    fi
+  done
 }
 
 verificar_ambiente

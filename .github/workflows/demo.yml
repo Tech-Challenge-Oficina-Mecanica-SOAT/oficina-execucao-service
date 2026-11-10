@@ -34,9 +34,9 @@ jobs:
       - name: Demo do rollback
         run: bash demo/demo-rollback.sh
 
-      - name: Logs da API
+      - name: Logs dos serviços
         if: always()
-        run: docker compose -f demo/docker-compose.demo.yml logs api
+        run: docker compose -f demo/docker-compose.demo.yml logs --no-color
 
       - name: Derrubar ambiente
         if: always()
