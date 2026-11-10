@@ -22,6 +22,19 @@ case "$TARGET" in
 esac
 export TARGET
 
+# Rotulos dos passos simulados (texto entre parenteses nos titulos de step)
+case "$TARGET" in
+  local)
+    SIM_OS_ROTULO="Wiremock simulando o OS Service"
+    SIM_BILLING_ROTULO="Wiremock"
+    ;;
+  eks)
+    SIM_OS_ROTULO="simulado pelo script: o OS Service não existe neste ambiente"
+    SIM_BILLING_ROTULO="simulado pelo script: o Billing Service não existe neste ambiente"
+    ;;
+esac
+export SIM_OS_ROTULO SIM_BILLING_ROTULO
+
 VERIF_QUEUE_URL="http://localhost:4566/000000000000/oficina-execucao-verificacao-queue"
 
 # Os caminhos do compose sao relativos a raiz do repositorio

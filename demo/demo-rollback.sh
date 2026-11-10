@@ -3,7 +3,7 @@ set -euo pipefail
 
 # Demo da compensacao da Saga (rollback): orcamento recusado cancela a OS.
 # Prova tambem a idempotencia: o mesmo os.cancelada entregue 3 vezes gera 1 transicao.
-# OS e Billing sao simulados (Wiremock + eventos publicados pelo script).
+# OS e Billing sao simulados pelo script (Wiremock no alvo local, ids gerados pelo script no alvo eks).
 # Pre-requisito: ambiente no ar e provisionado (demo/demo-setup.sh).
 DEMO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$DEMO_DIR/lib/demo-lib.sh"
@@ -15,7 +15,7 @@ fila_contem() {
   [[ "$fila" == *"$1"* ]]
 }
 
-step "Abrir OS (Wiremock simulando o OS Service)"
+step "Abrir OS ($SIM_OS_ROTULO)"
 abrir_os_simulada
 
 step "OS Service publica os.criada"
