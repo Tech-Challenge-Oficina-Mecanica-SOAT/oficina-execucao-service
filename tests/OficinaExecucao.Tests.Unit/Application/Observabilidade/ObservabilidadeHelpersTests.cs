@@ -56,13 +56,31 @@ public class ObservabilidadeHelpersTests
     public void NomeTransacao_Mensagem_UsaOTipoDoEvento()
     {
         NomeTransacao.Mensagem("os.criada").Should().Be("SQS/os.criada");
-        NomeTransacao.Mensagem(null).Should().Be("SQS/desconhecido");
+        NomeTransacao.Mensagem("os.cancelada").Should().Be("SQS/os.cancelada");
+        NomeTransacao.Mensagem("orcamento.aprovado").Should().Be("SQS/orcamento.aprovado");
     }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData("os.inventada")]
+    [InlineData("OS.CRIADA-x")]
+    public void NomeTransacao_Mensagem_TipoDesconhecidoOuInvalido_VaiParaDesconhecido(string? tipo)
+        => NomeTransacao.Mensagem(tipo).Should().Be("SQS/desconhecido");
+
+    [Fact]
+    public void NomeTransacao_Mensagem_TipoMuitoLongo_VaiParaDesconhecido()
+        => NomeTransacao.Mensagem(new string('a', 5000)).Should().Be("SQS/desconhecido");
 
     [Theory]
     [InlineData("/health/live", true)]
     [InlineData("/health/ready", true)]
     [InlineData("/Health/Ready", true)]
+    [InlineData("/health", true)]
+    [InlineData("/healthcheck", false)]
+    [InlineData("/healthy-things", false)]
+    [InlineData("/healthcheck-report", false)]
     [InlineData("/fila", false)]
     [InlineData("/execucao/abc", false)]
     public void NomeTransacao_DeveIgnorar_SoParaHealthChecks(string path, bool esperado)

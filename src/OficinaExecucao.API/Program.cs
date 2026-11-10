@@ -10,6 +10,7 @@ using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using OficinaExecucao.API.Configuration;
 using OficinaExecucao.API.Endpoints;
+using OficinaExecucao.API.Middleware;
 using OficinaExecucao.Application;
 using OficinaExecucao.Application.Configuration;
 using OficinaExecucao.Application.Observabilidade;
@@ -19,7 +20,6 @@ using OficinaExecucao.Infrastructure.Auth;
 using OficinaExecucao.Infrastructure.DynamoDb;
 using OficinaExecucao.Infrastructure.Messaging;
 using OficinaExecucao.Infrastructure.Observabilidade;
-using OficinaExecucao.API.Middleware;
 
 Log.Logger = new LoggerConfiguration()
     .WriteTo.Console(new CompactJsonFormatter())

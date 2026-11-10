@@ -6,5 +6,6 @@ namespace OficinaExecucao.Application.Observabilidade;
 /// </summary>
 public sealed class CorrelacaoAtual
 {
+    // Estado mutável com escopo DI: usar apenas dentro do escopo por mensagem do consumidor.
     public string? CorrelationId { get; set; }
 }

@@ -81,6 +81,18 @@ public class ObservabilidadeMiddlewareTests : IClassFixture<WebApplicationFactor
     }
 
     [Fact]
+    public async Task RotaPost_NomeiaPeloTemplateEAdicionaOsId()
+    {
+        var osId = Guid.NewGuid();
+
+        await ClienteAutenticado().PostAsync($"/execucao/{osId}/diagnostico", new StringContent("{}", System.Text.Encoding.UTF8, "application/json"));
+
+        _gravador.Nomes.Should().ContainSingle().Which.Should().Be("POST /execucao/{osId}/diagnostico");
+        _gravador.Atributos["osId"].Should().Be(osId.ToString());
+        _gravador.Ignoradas.Should().Be(0);
+    }
+
+    [Fact]
     public async Task RotaSemOsId_NomeiaPeloTemplateSemAtributoOsId()
     {
         await ClienteAutenticado().GetAsync("/fila");
@@ -100,5 +112,6 @@ public class ObservabilidadeMiddlewareTests : IClassFixture<WebApplicationFactor
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         _gravador.Ignoradas.Should().Be(1);
         _gravador.Nomes.Should().BeEmpty();
+        _gravador.Atributos.Should().BeEmpty();
     }
 }

@@ -6,16 +6,16 @@ O serviço roda com o agente .NET do New Relic (injetado pelo init container, ve
 
 ### Requisições HTTP (API)
 
-- **Nome da transação:** o template da rota, nunca o `osId` concreto. Exemplos: `Web/GET /execucao/{osId}`, `Web/POST /execucao/{osId}/diagnostico`, `Web/GET /fila`. Isso evita uma métrica por ordem de serviço.
+- **Nome da transação:** o template da rota, nunca o `osId` concreto. O nome completo no New Relic (NRQL `name`) tem o prefixo `WebTransaction/Web/`. Exemplos: `WebTransaction/Web/GET /execucao/{osId}`, `WebTransaction/Web/POST /execucao/{osId}/diagnostico`, `WebTransaction/Web/GET /fila`. Isso evita uma métrica por ordem de serviço.
 - **Health checks ignorados:** `/health/live` e `/health/ready` não geram transações nem traces.
 - **Atributos customizados:** `correlationId` (trace id W3C da requisição, o mesmo que aparece nos logs) em toda requisição, e `osId` nas rotas que têm `osId`.
 - **Logs:** `correlationId` e `osId` entram no escopo de log, então aparecem como campos nos logs JSON de tudo que é registrado durante a requisição.
 
 ### Consumo de mensagens (SQS)
 
-Cada mensagem processada pelo consumidor vira uma transação de background chamada `Message/SQS/<eventType>` (por exemplo `Message/SQS/os.criada`; no New Relic o nome completo aparece com o prefixo `OtherTransaction/`).
+Cada mensagem processada pelo consumidor vira uma transação de background chamada `OtherTransaction/Message/SQS/<eventType>` no New Relic (NRQL `name`), por exemplo `OtherTransaction/Message/SQS/os.criada`. Para limitar a cardinalidade das métricas, só os tipos consumidos (`os.criada`, `os.cancelada`, `orcamento.aprovado`) entram no nome; qualquer outro valor vira `OtherTransaction/Message/SQS/desconhecido`.
 
-- **Atributos:** `osId`, `eventType`, `eventId` e `correlationId`.
+- **Atributos:** `osId`, `eventType` (o valor real, mesmo quando o nome da transação usa `desconhecido`), `eventId` e `correlationId`.
 - **`correlationId`:** vem do envelope do evento. O contrato do grupo define esse campo como o `traceparent` W3C da requisição que originou o evento. No log e no atributo usamos apenas o trace id (32 hex); se o valor não for um traceparent, ele é usado como veio. Se o envelope não tiver `correlationId`, a mensagem é processada normalmente, só sem esse campo.
 - **Eventos publicados durante o consumo** reaproveitam o `correlationId` recebido, para que a cadeia de eventos mantenha a mesma correlação.
 
@@ -36,10 +36,10 @@ SELECT average(duration), count(*) FROM Transaction FACET name SINCE 1 hour ago
 Somente o consumo de mensagens:
 
 ```sql
-SELECT count(*) FROM Transaction WHERE name LIKE '%Message/SQS/%' FACET eventType SINCE 1 hour ago
+SELECT count(*) FROM Transaction WHERE name LIKE 'OtherTransaction/Message/SQS/%' FACET eventType SINCE 1 hour ago
 ```
 
-Logs de uma mesma cadeia de eventos:
+Logs de uma mesma cadeia de eventos (assume que o encaminhamento de logs do New Relic expõe as propriedades do escopo de log, como `correlationId`, como atributos; confirme na UI antes de depender disso):
 
 ```sql
 SELECT * FROM Log WHERE correlationId = '<traceid>' SINCE 1 hour ago

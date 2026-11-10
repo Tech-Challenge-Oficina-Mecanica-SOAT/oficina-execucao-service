@@ -14,11 +14,20 @@ public static partial class NomeTransacao
     public static string Web(string metodoHttp, string templateRota) =>
         $"{metodoHttp.ToUpperInvariant()} {ParametroRegex().Replace(templateRota, "{${nome}}")}";
 
-    /// <summary>Ex.: "SQS/os.criada".</summary>
+    private const string TipoDesconhecido = "desconhecido";
+
+    // Lista fechada: o eventType vem do corpo da mensagem, então nomes livres criariam métricas ilimitadas no APM.
+    private static readonly HashSet<string> TiposConhecidos = new(StringComparer.Ordinal)
+    {
+        "os.criada", "os.cancelada", "orcamento.aprovado",
+    };
+
+    /// <summary>Ex.: "SQS/os.criada". Tipos fora da lista conhecida (ou nulos/vazios/longos) viram "SQS/desconhecido".</summary>
     public static string Mensagem(string? eventType) =>
-        $"SQS/{(string.IsNullOrWhiteSpace(eventType) ? "desconhecido" : eventType)}";
+        $"SQS/{(eventType is not null && TiposConhecidos.Contains(eventType) ? eventType : TipoDesconhecido)}";
 
     /// <summary>Health checks (liveness/readiness) são ruído para o APM.</summary>
     public static bool DeveIgnorar(string? path) =>
-        path is not null && path.StartsWith("/health", StringComparison.OrdinalIgnoreCase);
+        path is not null &&
+        (path.Equals("/health", StringComparison.OrdinalIgnoreCase) || path.StartsWith("/health/", StringComparison.OrdinalIgnoreCase));
 }
