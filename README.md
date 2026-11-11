@@ -144,9 +144,13 @@ O workflow [.github/workflows/ci.yml](.github/workflows/ci.yml) tem quatro jobs:
 
 O deploy é opt-in porque as credenciais do AWS Academy expiram em cerca de 4 horas e precisam ser renovadas nos secrets antes de cada uso. Configuração em [docs/deploy.md](docs/deploy.md).
 
+**Por que o deploy automático não roda por padrão:** o AWS Academy não permite criar roles IAM nem federação OIDC com o GitHub, então o workflow não tem como assumir uma identidade permanente. A única forma de acessar a conta é com as credenciais temporárias da sessão do laboratório, que expiram em cerca de 4 horas e são canceladas quando o laboratório é renovado. Guardá-las como secrets duradouros do repositório faria o job falhar na maior parte do tempo. Por isso o job está implementado e passa na validação de sintaxe do CI (ele só executa com `DEPLOY_HOMOLOG=true` e os secrets preenchidos), e o deploy usado na demonstração é o mesmo `scripts/deploy.sh homolog` que o job executa, rodado manualmente com as credenciais da sessão. Em uma conta sem essa restrição, bastaria trocar as credenciais temporárias por OIDC com uma role de deploy.
+
 ## Observabilidade
 
 O serviço usa o agente .NET do New Relic (APM) e logs JSON com Serilog. Transações HTTP levam o nome da rota (sem o `osId`), o consumo SQS vira transação `OtherTransaction/Message/SQS/<eventType>` e `correlationId` e `osId` acompanham logs e transações. Nomes de transação, atributos e consultas NRQL em [docs/observabilidade.md](docs/observabilidade.md).
+
+**Rastreamento distribuído:** o fio condutor de uma OS entre os serviços é o `correlationId` (trace id W3C no envelope do evento) junto com o `osId`, presentes em logs e transações de cada serviço. Com eles, uma consulta NRQL reconstrói o caminho da OS nos serviços que reportam ao New Relic. A ligação em um único trace visual do New Relic atravessando SNS e SQS não é garantida: o serviço entrega o `traceparent` do envelope ao agente ao consumir, mas o encadeamento só aparece se o serviço produtor também estiver instrumentado e propagar o contexto, e a instrumentação dos demais serviços pertence aos respectivos responsáveis no grupo. Por isso a demonstração se apoia na correlação por identificadores, e não em um trace ponta a ponta.
 
 ## Infraestrutura (Terraform)
 
@@ -220,4 +224,7 @@ Os testes e as demos rodam do jeito que rodam por causa de limites do AWS Academ
 - Os serviços não têm URL pública (só `ClusterIP`): o acesso é por `kubectl port-forward`.
 - O RDS é privado e compartilhado entre serviços; o Execução usa DynamoDB e não depende dele.
 - Contas do Academy são efêmeras: bucket de state, tabelas e cluster precisam ser recriados a cada sessão, e nomes de bucket S3 são globalmente únicos (ver [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)).
+- Sem OIDC nem roles IAM, o deploy automatizado do CI fica opt-in (ver [CI/CD](#cicd)): as credenciais do laboratório não servem como secret permanente.
+- O trace distribuído visual entre serviços através de SNS e SQS não é garantido (ver [Observabilidade](#observabilidade)); a correlação é feita por `correlationId` e `osId`.
+- O Mercado Pago roda em modo fake no fluxo completo, porque o webhook real exige uma URL pública, que o laboratório não oferece.
 - O E2E usa LocalStack porque os testes automatizados não podem depender de credenciais que expiram.
