@@ -1,0 +1,46 @@
+# Overlay para rodar o Billing no AWS Academy sem alterar o repositório do Billing.
+# Diferenças em relação a k8s/overlays/homolog do Billing: namespace oficina, credenciais da sessão por
+# variável de ambiente (sem IRSA), 1 réplica (o Mercado Pago fake guarda as cobranças em memória), sem
+# Ingress ALB, Mercado Pago fake, e o Cadastros acessado por um proxy que corrige o campo nome -> descricao.
+# O deploy-billing-academy.sh copia este overlay para uma pasta temporária ao lado do clone do Billing e ajusta o
+# caminho de resources. A imagem fica fixada em newTag (tag = sha de 12 caracteres do commit; não há latest):
+# ao remover o proxy depois do PR de correção do Billing, troque também o newTag pelo sha da imagem nova.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: oficina
+resources:
+  - ../../../../oficina-billing-service/k8s/base
+  - cadastros-proxy.yaml
+images:
+  - name: ghcr.io/OWNER/oficina-billing-service
+    newName: ghcr.io/tech-challenge-oficina-mecanica-soat/oficina-billing-service
+    newTag: 365c070e3b24
+patches:
+  - target: {kind: Deployment, name: oficina-billing-service}
+    patch: |-
+      - {op: replace, path: /spec/replicas, value: 1}
+      - {op: add, path: /spec/template/spec/imagePullSecrets, value: [{name: ghcr-pull-secret}]}
+      - {op: add, path: /spec/template/spec/containers/0/envFrom/-, value: {secretRef: {name: billing-academy-secrets}}}
+  - target: {kind: HorizontalPodAutoscaler, name: oficina-billing-service}
+    patch: |-
+      - {op: replace, path: /spec/minReplicas, value: 1}
+      - {op: replace, path: /spec/maxReplicas, value: 1}
+  - target: {kind: ServiceAccount, name: oficina-billing-service}
+    patch: |-
+      - {op: remove, path: /metadata/annotations}
+  - target: {kind: Ingress, name: oficina-billing-webhook}
+    patch: |-
+      $patch: delete
+      apiVersion: networking.k8s.io/v1
+      kind: Ingress
+      metadata:
+        name: oficina-billing-webhook
+  - target: {kind: ConfigMap, name: oficina-billing-config}
+    patch: |-
+      - {op: replace, path: /data/Messaging__Environment, value: "homolog"}
+      - {op: replace, path: /data/Services__OsService__BaseUrl, value: "http://oficina-os-service.oficina.svc.cluster.local"}
+      - {op: replace, path: /data/Services__CadastrosService__BaseUrl, value: "http://cadastros-proxy.oficina.svc.cluster.local"}
+      - {op: replace, path: /data/Secrets__Enabled, value: "false"}
+      - {op: replace, path: /data/MercadoPago__UseFake, value: "true"}
+      - {op: replace, path: /data/MercadoPago__ValidateSignature, value: "false"}
+      - {op: replace, path: /data/NEW_RELIC_APP_NAME, value: "oficina-billing-service"}

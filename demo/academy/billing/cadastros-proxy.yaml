@@ -1,0 +1,51 @@
+# Proxy que corrige o contrato Cadastros -> Billing: o Cadastros devolve "nome" e o Billing espera "descricao".
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cadastros-proxy-conf
+data:
+  default.conf: |
+    server {
+      listen 80;
+      location / {
+        proxy_pass http://oficina-cadastros-service.oficina.svc.cluster.local;
+        proxy_set_header Host $host;
+        proxy_set_header Accept-Encoding "";
+        sub_filter_types application/json;
+        sub_filter '"nome":' '"descricao":';
+        sub_filter_once off;
+      }
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cadastros-proxy
+  labels: {app: cadastros-proxy}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: cadastros-proxy}}
+  template:
+    metadata: {labels: {app: cadastros-proxy}}
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:1.27-alpine
+          ports: [{containerPort: 80}]
+          resources:
+            requests: {cpu: 10m, memory: 16Mi}
+            limits: {cpu: 100m, memory: 64Mi}
+          volumeMounts:
+            - {name: conf, mountPath: /etc/nginx/conf.d}
+      volumes:
+        - name: conf
+          configMap: {name: cadastros-proxy-conf}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cadastros-proxy
+spec:
+  type: ClusterIP
+  selector: {app: cadastros-proxy}
+  ports: [{port: 80, targetPort: 80}]

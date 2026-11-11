@@ -16,6 +16,7 @@
     <PackageReference Include="AWSSDK.SimpleNotificationService" Version="4.0.100.13" />
     <PackageReference Include="AWSSDK.SQS" Version="4.0.100.13" />
     <PackageReference Include="Microsoft.Extensions.Options" Version="10.0.12" />
+    <PackageReference Include="NewRelic.Agent.Api" Version="10.35.0" />
     <PackageReference Include="AspNetCore.Authentication.ApiKey" Version="9.0.0" />
   </ItemGroup>
 
